@@ -21,34 +21,32 @@ Three things the audience should leave with:
 - [ ] Rehearse clicking **Verify hash chain** in the app. This button has only been checked through the API.
 - [ ] Turn off Windows notifications (Focus / Do Not Disturb) and set the laptop to never sleep while on power.
 - [ ] Set the display to the projector resolution and check the app at that size. The app opens maximized.
+- [ ] Put a shortcut to `Start-BLADE.cmd` on the desktop: right-click it, then **Show more options → Send to → Desktop (create shortcut)**.
 
 ### 60 minutes before
 1. Plug in power. A GPU on battery is much slower.
-2. Make sure Ollama is running. The tray icon should be visible, and `ollama ps` should respond.
-3. Start the server from the `blade` folder:
-   ```bash
-   dotnet run --project src/Blade.Server --no-launch-profile
-   ```
-4. Start the desktop:
-   ```bash
-   dotnet run --project src/Blade.Desktop
-   ```
-5. Run the golden questions. Every ASK section should show the 7-case series, and the security checks should say `OK`:
+2. Double-click **`Start-BLADE.cmd`** in the `blade` folder, or its desktop shortcut. It takes about a minute:
+   - checks power, the .NET SDK, Ollama (starting it if needed) and both models;
+   - builds, starts the server (log in `logs\`) and waits until the models are warm;
+   - opens the app, then minimizes its own window.
+
+   Every line should say `OK`. If a line says `FAILED`, it tells you what to fix.
+3. Leave the minimized **BLADE launcher** window open. It re-warms the models every 20 minutes, so they never unload mid-demo, and when you close the app it stops the server.
+4. Run the golden questions. Every ASK section should show the 7-case series, and the security checks should say `OK`:
    ```powershell
    .\tools\golden-questions.ps1
    ```
 
 ### 10 minutes before
-Models unload after 60 idle minutes. On a cold first question, the results take about 25 s to appear instead of about 5 s.
-1. Warm the models:
-   ```powershell
-   Invoke-RestMethod -Method Post http://localhost:5179/api/admin/warmup
-   ```
-2. In the app, open **Ask BLADE** and run the first sample once. Leave its answer on screen. You will run it again live.
-3. Set the role to **ANALYST** (user `j.alvarez`).
-4. Go to **Security & Governance**, scrolled to the top.
-5. Leave Wi-Fi **on** for now. You will turn it off on stage.
-6. Close everything else on the laptop: email, chat, browsers.
+The launcher keeps the models warm. If you started BLADE some other way, warm them yourself: models unload after 60 idle minutes, and a cold first question takes about 25 s to show results instead of about 5 s.
+```powershell
+Invoke-RestMethod -Method Post http://localhost:5179/api/admin/warmup
+```
+1. In the app, open **Ask BLADE** and run the first sample once. Leave its answer on screen. You will run it again live.
+2. Set the role to **ANALYST** (user `j.alvarez`).
+3. Go to **Security & Governance**, scrolled to the top.
+4. Leave Wi-Fi **on** for now. You will turn it off on stage.
+5. Close everything else on the laptop: email, chat, browsers.
 
 ---
 
@@ -233,7 +231,8 @@ Mention the rest in one breath: body-cam transcription, a report quality checker
 
 | Problem | What to do |
 |---|---|
-| The status bar says the server is offline | Click **Start local server** in the status bar. Wait about 15 s while it warms the models. |
+| The status bar says the server is offline | Double-click `Start-BLADE.cmd` again: it reuses whatever is still running and restarts the rest. Or click **Start local server** in the status bar and wait about 15 s. |
+| Something is stuck | Double-click `Stop-BLADE.cmd`, then `Start-BLADE.cmd`. |
 | The first results take about 25 s to appear | The models were cold. Keep talking with the "while the first 5 s run" points. The next question is back to normal speed. |
 | Ollama isn't responding | Start Ollama from the Start menu. Then run the warmup command from Pre-flight. |
 | An answer comes back thin or uncited | Click **Ask** again. The server already retries once on its own when citations are missing. If an **unverified** citation appears, use it: "That's the guard catching the model." |

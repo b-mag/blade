@@ -21,7 +21,15 @@ Proof of concept: a local-AI investigative and policy assistant for a sheriff's 
   ollama pull nomic-embed-text
   ```
 
-## Run
+## Demo day: one double-click
+Double-click **`Start-BLADE.cmd`**. It checks Ollama and the models, builds, generates the data if it is missing, starts the server, waits for the models to warm up, and opens the app. Its window minimizes and keeps the models warm. Closing the app stops the server. Server logs go to `logs\`.
+
+`Stop-BLADE.cmd` stops anything left running. To skip the build, run:
+```
+Start-BLADE.cmd -NoBuild
+```
+
+## Run manually
 Generate the data once (~40 s with embeddings):
 ```
 dotnet run --project src/Blade.DataGen
