@@ -1,0 +1,81 @@
+<UserControl x:Class="Blade.Desktop.Views.UnderTheHoodView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- DataContext: Blade.Core.AiTrace -->
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="16">
+            <TextBlock Text="UNDER THE HOOD" Style="{StaticResource Label}" Foreground="{StaticResource Gold}"/>
+            <TextBlock Style="{StaticResource MutedText}" FontSize="12" Margin="0,4,0,12"
+                       Text="Everything the server did to produce this answer. Nothing here is hidden from the user or the auditor."/>
+
+            <Border Style="{StaticResource CardBorder}" Padding="12">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource Label}" Text="MODEL"/>
+                    <TextBlock Margin="0,4,0,0" TextWrapping="Wrap"><Run Text="{Binding Model, Mode=OneWay}" FontWeight="SemiBold"/><Run Text=" via "/><Run Text="{Binding Provider, Mode=OneWay}"/></TextBlock>
+                    <TextBlock Margin="0,4,0,0" Foreground="{StaticResource Muted}" FontSize="12">
+                        <Run Text="Tokens in / out: "/><Run Text="{Binding PromptTokens, Mode=OneWay}"/><Run Text=" / "/><Run Text="{Binding CompletionTokens, Mode=OneWay}"/>
+                    </TextBlock>
+                </StackPanel>
+            </Border>
+
+            <TextBlock Style="{StaticResource Label}" Text="PIPELINE STAGES" Margin="0,14,0,6"/>
+            <ItemsControl ItemsSource="{Binding Stages}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Margin="0,0,0,8">
+                            <DockPanel>
+                                <TextBlock DockPanel.Dock="Right" FontFamily="{StaticResource Mono}" FontSize="11.5" Foreground="{StaticResource Gold}"><Run Text="{Binding Ms, Mode=OneWay}"/><Run Text=" ms"/></TextBlock>
+                                <TextBlock Text="{Binding Name}" FontSize="12.5" TextWrapping="Wrap"/>
+                            </DockPanel>
+                            <Border Height="5" CornerRadius="2" Background="{StaticResource Accent}" HorizontalAlignment="Left" Margin="0,3,0,2" Width="{Binding Ms, Converter={StaticResource MsToWidth}}"/>
+                            <TextBlock Text="{Binding Detail}" FontSize="11.5" Foreground="{StaticResource Muted}" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <TextBlock Style="{StaticResource Label}" Text="SAFETY &amp; GOVERNANCE CHECKS" Margin="0,10,0,6"/>
+            <ItemsControl ItemsSource="{Binding SafetyChecks}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <DockPanel Margin="0,0,0,5">
+                            <TextBlock DockPanel.Dock="Left" Text="&#xE73E;" FontFamily="Segoe MDL2 Assets" Foreground="{StaticResource Success}" Margin="0,2,8,0"/>
+                            <TextBlock Text="{Binding}" FontSize="12" TextWrapping="Wrap"/>
+                        </DockPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <TextBlock Style="{StaticResource Label}" Text="RECORDS GIVEN TO THE MODEL (RANKED)" Margin="0,12,0,6"/>
+            <ItemsControl ItemsSource="{Binding Retrieved}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <DockPanel Margin="0,0,0,4">
+                            <TextBlock DockPanel.Dock="Left" Width="88" Text="{Binding Id}" FontFamily="{StaticResource Mono}" FontSize="11.5" Foreground="{StaticResource Accent}"/>
+                            <TextBlock DockPanel.Dock="Left" Width="44" Text="{Binding Score, StringFormat=0.00}" FontFamily="{StaticResource Mono}" FontSize="11.5" Foreground="{StaticResource Gold}"/>
+                            <TextBlock Text="{Binding Note}" FontSize="11.5" Foreground="{StaticResource Muted}" TextTrimming="CharacterEllipsis"/>
+                        </DockPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <Expander Header="Query planner prompt (LLM → JSON filter)" Margin="0,14,0,0" Foreground="{StaticResource Text}"
+                      Visibility="{Binding PlannerSystemPrompt, Converter={StaticResource VisibleWhen}}">
+                <TextBox Style="{StaticResource CodeBox}" Text="{Binding PlannerSystemPrompt, Mode=OneWay}" Margin="0,6,0,0"/>
+            </Expander>
+            <Expander Header="Planner raw output (JSON)" Margin="0,8,0,0" Foreground="{StaticResource Text}"
+                      Visibility="{Binding PlannerRawOutput, Converter={StaticResource VisibleWhen}}">
+                <TextBox Style="{StaticResource CodeBox}" Text="{Binding PlannerRawOutput, Mode=OneWay}" Margin="0,6,0,0"/>
+            </Expander>
+            <Expander Header="Answer system prompt (grounding rules)" Margin="0,8,0,0" Foreground="{StaticResource Text}">
+                <TextBox Style="{StaticResource CodeBox}" Text="{Binding AnswerSystemPrompt, Mode=OneWay}" Margin="0,6,0,0"/>
+            </Expander>
+            <Expander Header="Exact context sent to the model" Margin="0,8,0,0" Foreground="{StaticResource Text}">
+                <TextBox Style="{StaticResource CodeBox}" Text="{Binding AnswerUserPrompt, Mode=OneWay}" Margin="0,6,0,0" MaxHeight="420"/>
+            </Expander>
+            <Expander Header="Raw model output (before citation guard)" Margin="0,8,0,0" Foreground="{StaticResource Text}">
+                <TextBox Style="{StaticResource CodeBox}" Text="{Binding AnswerRawOutput, Mode=OneWay}" Margin="0,6,0,0"/>
+            </Expander>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

@@ -1,0 +1,78 @@
+# ============================================================
+# BLADE — .gitignore
+# Keep this current as projects/artifacts are added.
+# ============================================================
+
+# ---- .NET build output ----
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]64/
+publish/
+artifacts/
+*.nupkg
+*.snupkg
+project.lock.json
+project.fragment.lock.json
+
+# ---- IDE / editor ----
+.vs/
+.vscode/*
+!.vscode/settings.json
+!.vscode/launch.json
+!.vscode/tasks.json
+!.vscode/extensions.json
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.rsuser
+*.swp
+~$*
+
+# ---- Claude Code local (per-machine) settings ----
+.claude/settings.local.json
+
+# ---- Tests / coverage ----
+TestResults/
+[Tt]est[Rr]esult*/
+coverage*.json
+coverage*.xml
+*.coverage
+*.trx
+
+# ---- Secrets & local config (cloud fallback keys must NEVER be committed) ----
+appsettings.*.local.json
+appsettings.Local.json
+*.secrets.json
+secrets.json
+.env
+.env.*
+!.env.example
+
+# ---- Generated data (reproducible from Blade.DataGen with a fixed seed) ----
+data/*.db
+data/*.db-shm
+data/*.db-wal
+data/*.db-journal
+data/generated/
+data/cache/
+
+# ---- Runtime output ----
+logs/
+*.log
+audit-export*/
+
+# ---- WebView2 user data folders ----
+*.WebView2/
+WebView2Data/
+
+# ---- OS ----
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store

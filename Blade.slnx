@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Blade.Core/Blade.Core.csproj" />
+    <Project Path="src/Blade.DataGen/Blade.DataGen.csproj" />
+    <Project Path="src/Blade.Desktop/Blade.Desktop.csproj" />
+    <Project Path="src/Blade.Server/Blade.Server.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Blade.Tests/Blade.Tests.csproj" />
+  </Folder>
+</Solution>

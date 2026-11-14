@@ -1,0 +1,736 @@
+{
+  "home": {
+    "title": "BLADE: Bureau Linked Analytics & Data Explorer",
+    "intro": "BLADE lets deputies, analysts and supervisors ask plain-English questions across RMS, CAD, field interviews, LPR, jail bookings and pawn records, and get grounded answers with citations back to the source records. Every model runs on hardware the agency controls, every query is filtered by role before the model sees anything, and every action lands in a tamper-evident audit log.",
+    "pocStatement": "This is a proof of concept, not a product. It runs on one laptop (RTX 4060, 8 GB) with a local open-weight model (qwen3:8b via Ollama) against synthetic data for the fictional Kestrel County Sheriff's Office; no real CJI is present. The controls marked Implemented actually run in this build; identity is stubbed with a role switcher; items marked Production design are the plan for a real deployment, not features we are claiming today.",
+    "sections": [
+      {
+        "heading": "Data sovereignty & deployment",
+        "items": [
+          {
+            "title": "Local-only inference by default",
+            "detail": "Models run on agency-controlled hardware (in the POC, Ollama on this laptop). No prompt, record or answer leaves the machine.",
+            "inPoc": "Implemented in POC"
+          },
+          {
+            "title": "Cloud provider is a visible, POC-only switch",
+            "detail": "A cloud LLM option exists only as a config setting for synthetic-data experiments, and any screen using it shows an amber CLOUD (POC ONLY) badge.",
+            "inPoc": "Implemented in POC"
+          },
+          {
+            "title": "Thin client, server-brokered AI",
+            "detail": "Workstations never call a model directly. A server API brokers all AI access, so filtering, logging and safety checks cannot be bypassed from the desktop.",
+            "inPoc": "Implemented in POC"
+          },
+          {
+            "title": "Segmented model server, no outbound internet",
+            "detail": "In production the model server sits on its own VLAN, reachable only from the API tier, with egress to the internet blocked at the firewall.",
+            "inPoc": "Production design"
+          }
+        ]
+      },
+      {
+        "heading": "Identity & access",
+        "items": [
+          {
+            "title": "Role-based retrieval filtering before the model",
+            "detail": "DEPUTY sees NORMAL records, ANALYST adds JUVENILE, SUPERVISOR adds RESTRICTED (sealed). Filtering happens in SQL, so withheld records never reach the model.",
+            "inPoc": "Implemented in POC"
+          },
+          {
+            "title": "Withheld-record notice",
+            "detail": "When records are excluded by role, the user is told how many were withheld, so absence of a result is never mistaken for absence of data.",
+            "inPoc": "Implemented in POC"
+          },
+          {
+            "title": "User and role from a desktop role switcher",
+            "detail": "For the demo, user and role are passed as request headers from a role switcher. This shows the enforcement path, not real authentication.",
+            "inPoc": "Stubbed in POC"
+          },
+          {
+            "title": "AD / Entra ID with MFA (advanced authentication)",
+            "detail": "Production binds identity and role to your directory groups and requires CJIS-compliant advanced authentication; the server derives role from the token, not the client.",
+            "inPoc": "Production design"
+          },
+          {
+            "title": "Need-to-know prompt for person lookups",
+            "detail": "Person-centric queries without a case or incident number require a stated purpose, which is recorded in the audit log for later review.",
+            "inPoc": "Production design"
+          }
+        ]
+      },
+      {
+        "heading": "Audit & monitoring",
+        "items": [
+          {
+            "title": "Append-only, hash-chained audit log",
+            "detail": "Every AI query, record view and access denial is logged with user, role, workstation, question, interpreted filter, records returned and cited, model, provider, latency and tokens.",
+            "inPoc": "Implemented in POC"
+          },
+          {
+            "title": "Tamper detection by chain verification",
+            "detail": "Each entry carries a SHA-256 hash of the previous entry. A verification routine recomputes the chain and pinpoints any edited or deleted row.",
+            "inPoc": "Implemented in POC"
+          },
+          {
+            "title": "Denied attempts and per-user usage",
+            "detail": "Access denials are logged like any other event, and a per-user usage summary supports supervisor and auditor review.",
+            "inPoc": "Implemented in POC"
+          },
+          {
+            "title": "SIEM forwarding and usage anomaly detection",
+            "detail": "Production forwards audit events to your SIEM and alerts on unusual patterns, such as bulk person lookups or after-hours spikes from one account.",
+            "inPoc": "Production design"
+          },
+          {
+            "title": "WORM storage and retention schedule",
+            "detail": "Audit records move to immutable (write-once) storage on a retention schedule aligned with CJIS and your state records retention requirements.",
+            "inPoc": "Production design"
+          }
+        ]
+      },
+      {
+        "heading": "Answer integrity",
+        "items": [
+          {
+            "title": "Grounded answers with citations",
+            "detail": "Answers are generated only from retrieved records (RAG) using hybrid retrieval: SQL filter, BM25 keyword and vector similarity, plus entity-graph link analysis across sources.",
+            "inPoc": "Implemented in POC"
+          },
+          {
+            "title": "Citation guard",
+            "detail": "Every case, report, booking, pawn or policy ID the model writes is checked against the records it was given; unknown IDs are flagged UNVERIFIED, and uncited answers are regenerated once.",
+            "inPoc": "Implemented in POC"
+          },
+          {
+            "title": "Model output is never executed",
+            "detail": "The model emits a JSON filter constrained by a schema with enums from your data vocabulary. The server builds parameterized SQL and computes dates in code.",
+            "inPoc": "Implemented in POC"
+          },
+          {
+            "title": "Under the Hood transparency panel",
+            "detail": "Shows prompts, interpreted filter, retrieved records with scores, per-stage timings, tokens, model and provider, and which safety checks ran.",
+            "inPoc": "Implemented in POC"
+          },
+          {
+            "title": "Automated tests and golden-question evaluation",
+            "detail": "A test suite and a scripted set of golden questions with expected records catch regressions when prompts, data or models change.",
+            "inPoc": "Implemented in POC"
+          },
+          {
+            "title": "Claim-level answer verification",
+            "detail": "Production adds a second pass that checks each factual sentence against its cited record, not just that the cited ID exists.",
+            "inPoc": "Production design"
+          }
+        ]
+      },
+      {
+        "heading": "Data protection & privacy",
+        "items": [
+          {
+            "title": "PII output and log filter",
+            "detail": "A filter hook masks driver's-license and SSN patterns in model output and logs. The POC covers those two patterns; the hook is designed to take more.",
+            "inPoc": "Implemented in POC"
+          },
+          {
+            "title": "Synthetic data watermark",
+            "detail": "Every screen is watermarked as synthetic data so screenshots from this demo cannot be mistaken for real records.",
+            "inPoc": "Implemented in POC"
+          },
+          {
+            "title": "Encryption in transit and at rest",
+            "detail": "TLS 1.2+ on every hop, and FIPS 140-validated encryption at rest for databases, vector indexes, model caches and logs.",
+            "inPoc": "Production design"
+          },
+          {
+            "title": "Configurable redaction policies",
+            "detail": "Policy-driven masking for juveniles, victims, medical information and confidential informants, applied per role and per output type.",
+            "inPoc": "Production design"
+          }
+        ]
+      },
+      {
+        "heading": "Governance, legal & policy",
+        "items": [
+          {
+            "title": "Approved-model registry and change control",
+            "detail": "Only registered, version-pinned models run. Every model or prompt change goes through the golden-question evaluation and a change control board before release.",
+            "inPoc": "Production design"
+          },
+          {
+            "title": "CJIS personnel and hosting requirements",
+            "detail": "Personnel screening for anyone with access, CJIS Security Addendum for any vendor staff, and hosting that meets the FBI CJIS Security Policy.",
+            "inPoc": "Production design"
+          },
+          {
+            "title": "Records retention, discovery and Brady/Giglio",
+            "detail": "AI drafts, prompts and logs are classified under your retention schedule and included in discovery and Brady/Giglio handling as counsel directs.",
+            "inPoc": "Production design"
+          },
+          {
+            "title": "Bias and civil-liberties review",
+            "detail": "Use cases are reviewed before launch and periodically; person-level predictive risk scoring is out of scope.",
+            "inPoc": "Production design"
+          },
+          {
+            "title": "Public AI-use policy",
+            "detail": "A published policy describing what AI is used for, what it is not used for, and how outputs are reviewed by people.",
+            "inPoc": "Production design"
+          }
+        ]
+      }
+    ]
+  },
+  "architecture": {
+    "intro": "The POC collapses everything onto one laptop. Production separates the same components into tiers you already know how to secure: clients, an API gateway, a model server on its own segment, read-only data replicas, and your existing logging and identity infrastructure. Nothing in the design requires a cloud service.",
+    "sections": [
+      {
+        "heading": "Production topology",
+        "items": [
+          {
+            "title": "Thin desktop or web clients",
+            "detail": "Workstations talk only to the BLADE API over TLS. They hold no model, no index and no credentials to source systems."
+          },
+          {
+            "title": "API gateway and orchestration tier",
+            "detail": "Authenticates against AD/Entra ID, enforces role filters, builds parameterized SQL, runs retrieval, calls the model, applies citation and PII checks, and writes the audit log."
+          },
+          {
+            "title": "Model server on a segmented VLAN",
+            "detail": "GPU host(s) running the LLM, embedding, speech and OCR models. Accepts connections only from the API tier; no inbound from users, no outbound internet."
+          },
+          {
+            "title": "Read-only replicas and analytics store",
+            "detail": "BLADE reads from replicas or extracts of RMS, CAD and JMS, never production databases. A relational store (PostgreSQL+pgvector or SQL Server 2025 vector type) holds normalized records and embeddings; Neo4j optional for the entity graph."
+          },
+          {
+            "title": "SIEM and immutable log storage",
+            "detail": "Audit events stream to your SIEM; the hash-chained log is archived to WORM storage for retention and investigations."
+          }
+        ]
+      },
+      {
+        "heading": "Integration patterns",
+        "items": [
+          {
+            "title": "Database replica or change data capture",
+            "detail": "Preferred where you own the database: a read-only replica or CDC feed into the BLADE store, with a service account limited to SELECT on approved views."
+          },
+          {
+            "title": "Vendor APIs",
+            "detail": "Where the RMS, CAD or JMS exposes a supported API, BLADE pulls through it under a scoped service credential and respects vendor rate limits."
+          },
+          {
+            "title": "File drops for legacy exports",
+            "detail": "For systems that only export CSV, XML or fixed-width files, a watched SFTP or SMB drop on the internal network feeds a validated import job."
+          },
+          {
+            "title": "OCR pipeline for paper and images",
+            "detail": "Scanned files and microfiche images go through local OCR (Tesseract or PaddleOCR), then entity extraction, with confidence scores kept for human review."
+          },
+          {
+            "title": "Nightly plus near-real-time ingestion",
+            "detail": "Bulk nightly loads rebuild indexes; CAD and booking events can stream every few minutes for operational use cases. Each record keeps its source system and timestamp."
+          }
+        ]
+      },
+      {
+        "heading": "Model lifecycle",
+        "items": [
+          {
+            "title": "Approved-model registry",
+            "detail": "Each model is recorded with source, license, checksum, quantization and approval date. The server refuses to load anything not in the registry."
+          },
+          {
+            "title": "Evaluation suite and golden questions",
+            "detail": "A fixed set of questions with known correct records, citation checks and role-filter tests runs on every model, prompt or retrieval change; results are kept as change evidence."
+          },
+          {
+            "title": "Version pinning",
+            "detail": "Model weights and prompts are pinned by hash, and every audit entry records the exact model version that produced the answer."
+          },
+          {
+            "title": "Rollback",
+            "detail": "The previous approved model stays on disk; reverting is a config change through change control, not a re-download."
+          }
+        ]
+      },
+      {
+        "heading": "Scaling & operations",
+        "items": [
+          {
+            "title": "Batched GPU serving",
+            "detail": "Production uses a serving engine with continuous batching (vLLM-style) so many short requests share one GPU efficiently; Ollama is fine for the POC and small pilots."
+          },
+          {
+            "title": "Separate interactive and batch workloads",
+            "detail": "Transcription, OCR and re-indexing run in scheduled or queued jobs so they do not slow interactive questions."
+          },
+          {
+            "title": "Health, capacity and cost telemetry",
+            "detail": "Latency, tokens, queue depth and GPU utilization per stage are already captured; production exports them to your monitoring stack for capacity planning."
+          },
+          {
+            "title": "Patching and backups",
+            "detail": "Model servers follow your standard patch cycle and backup policy; indexes are rebuildable from source, so backups focus on configuration, audit logs and the registry."
+          }
+        ]
+      },
+      {
+        "heading": "From POC to production",
+        "items": [
+          {
+            "title": "Real identity",
+            "detail": "Replace the role switcher with AD/Entra ID and MFA; map directory groups to BLADE roles and record need-to-know purposes."
+          },
+          {
+            "title": "Real data, real connectors",
+            "detail": "Replace synthetic generators with read-only connectors to your RMS, CAD and JMS, and map your codes into the filter vocabulary."
+          },
+          {
+            "title": "Hardened infrastructure",
+            "detail": "Move from a laptop to a server on a segmented VLAN with TLS, FIPS-validated encryption at rest, SIEM forwarding, WORM audit storage and no outbound internet."
+          },
+          {
+            "title": "Larger models and stronger verification",
+            "detail": "Move to 14-32B-class models or larger, add claim-level verification and configurable redaction policies, and rerun the evaluation suite on your own data."
+          },
+          {
+            "title": "Governance before go-live",
+            "detail": "AI-use policy, retention classification, Brady/Giglio handling, personnel screening and change control in place before any deputy sees a production answer."
+          }
+        ]
+      }
+    ],
+    "sizing": [
+      {
+        "tier": "POC (this laptop)",
+        "hardware": "Laptop with RTX 4060 (8 GB VRAM), 16 GB RAM",
+        "models": "qwen3:8b (LLM) and nomic-embed-text (embeddings) via Ollama",
+        "users": "1 presenter",
+        "notes": "Proves the workflow and controls, not performance at scale. Synthetic data only."
+      },
+      {
+        "tier": "Department pilot",
+        "hardware": "Single rack server with 1x 48 GB-class data-center GPU, 128 GB+ RAM, NVMe storage",
+        "models": "14-32B-class open-weight LLM (quantized), embedding model; Whisper-class speech model run in batch",
+        "users": "Estimate: roughly 25-75 concurrent light users (occasional questions, not continuous); confirm with a load test on your data",
+        "notes": "One unit or division, one or two use cases. No high availability; acceptable for a pilot with a manual fallback."
+      },
+      {
+        "tier": "Agency production",
+        "hardware": "2+ GPU servers for high availability, each with one or more 48-80 GB-class GPUs, behind the API tier",
+        "models": "Larger LLM or several task-specific models (drafting, redaction, Q&A), plus dedicated capacity for speech and OCR",
+        "users": "Agency-wide; capacity sized from pilot telemetry rather than a fixed number",
+        "notes": "vLLM-style batched serving, rolling model upgrades through the registry, failover between servers."
+      }
+    ]
+  },
+  "opportunities": [
+    {
+      "id": "report-narrative-assistant",
+      "title": "Report Narrative Assistant",
+      "tagline": "Draft the narrative from what the deputy already entered; the deputy stays the author.",
+      "problem": "Your deputies retype facts already captured in face-sheet fields, then write the narrative from memory at the end of a shift. Narrative quality varies widely, and report writing takes time away from patrol.",
+      "aiApproach": [
+        "Generates a first-draft narrative from structured fields (persons, times, location, offense) plus the deputy's bullet notes.",
+        "Uses only the facts provided; gaps are marked as placeholders for the deputy to fill, not invented.",
+        "Deputy edits and signs; the system records that AI drafting was used and requires an attestation before submission.",
+        "Phase 2: draft from a body-cam transcript, with each sentence linked to its timestamp."
+      ],
+      "localStack": [
+        "Local LLM (14-32B class) served on the agency model server",
+        "Prompt templates per report type, versioned in the model registry",
+        "faster-whisper for the phase 2 transcript path"
+      ],
+      "dataNeeded": [
+        "RMS report schema and field definitions",
+        "A set of approved example narratives per report type",
+        "Agency report-writing standards and policy"
+      ],
+      "integration": [
+        "Side panel or companion app that reads the in-progress report via RMS API or a field export; nothing is written back until the deputy approves.",
+        "Draft text returned to the deputy, who pastes or accepts it into the RMS narrative field.",
+        "Audit log stores the draft, final text diff and attestation for discovery."
+      ],
+      "roi": [
+        "Illustrative, replace with your numbers: hours saved/yr = reports/yr x minutes saved per report / 60.",
+        "Example: 20,000 reports x 10 min saved / 60 = about 3,300 deputy hours per year.",
+        "Secondary value: fewer returned reports and more consistent narratives for prosecutors."
+      ],
+      "risks": [
+        "Fabricated details in a sworn document: draft only from supplied facts, placeholders for gaps, deputy attestation required.",
+        "Discovery and credibility challenges: disclose AI drafting per policy and retain the draft and edit history.",
+        "Over-reliance and boilerplate: training, supervisor spot checks, and reports flagged when submitted with minimal edits."
+      ],
+      "effort": "M",
+      "effortDetail": "Pilot in 8-12 weeks with one patrol shift and two or three report types.",
+      "roiRank": 1
+    },
+    {
+      "id": "public-records-redaction",
+      "title": "Public Records Request Redaction Assistant",
+      "tagline": "Propose redactions for reports and BWC transcripts; a records clerk approves every one.",
+      "problem": "Public records requests keep growing, and each report or video transcript must be read line by line for exempt information under state public-records law. Backlogs create statutory deadline pressure and legal exposure.",
+      "aiApproach": [
+        "Detects candidate redactions: names of juveniles and victims, DOBs, addresses, phone numbers, DL and SSN numbers, medical details, CI references.",
+        "Tags each proposal with the exemption category it maps to, based on a rule table your counsel maintains.",
+        "Presents proposals for accept, reject or edit; nothing is redacted without a human decision.",
+        "Produces a redaction log listing each redaction and its stated basis."
+      ],
+      "localStack": [
+        "Local LLM plus pattern rules (regex) for structured identifiers",
+        "Local named-entity recognition model for names and locations",
+        "faster-whisper transcripts with timestamps for BWC audio"
+      ],
+      "dataNeeded": [
+        "Exemption rules from your state public-records law, as interpreted by counsel",
+        "Past redacted releases (to measure recall and precision)",
+        "Report exports and BWC audio or transcripts"
+      ],
+      "integration": [
+        "Runs as a records-unit workstation tool against exported PDFs and transcripts; output is a redacted copy plus log.",
+        "Fits alongside your existing request-tracking system; no change to the system of record.",
+        "Video redaction itself stays in your existing video tool; BLADE supplies the transcript segments and timestamps to redact."
+      ],
+      "roi": [
+        "Illustrative, replace with your numbers: hours saved/yr = requests/yr x hours per request x % reduction in review time.",
+        "Example: 1,500 requests x 3 hours x 40% = 1,800 records-staff hours per year.",
+        "Risk reduction: fewer missed deadlines and fewer inadvertent disclosures, measured against your current error log."
+      ],
+      "risks": [
+        "Missed redaction (privacy breach): human approves every page, rules for structured identifiers run independently of the model.",
+        "Over-redaction challenged by requester: each redaction carries an exemption basis, reviewed by the clerk.",
+        "Legal interpretation drift: counsel owns the rule table; changes go through change control."
+      ],
+      "effort": "M",
+      "effortDetail": "Pilot in 8-12 weeks with the records unit on written reports first, BWC transcripts second.",
+      "roiRank": 2
+    },
+    {
+      "id": "bodycam-transcription",
+      "title": "Body-cam & Interview Transcription and Search",
+      "tagline": "Local speech-to-text so hours of video become searchable text with timestamps.",
+      "problem": "Body-cam and interview recordings pile up faster than anyone can watch them. Finding a specific statement means scrubbing through video, and transcripts for court are slow and costly to produce.",
+      "aiApproach": [
+        "Transcribes audio locally with timestamps and speaker separation.",
+        "Indexes transcripts for keyword and semantic search across cases you are authorized to see.",
+        "Summarizes an interview with each summary line linked to its timestamp for verification.",
+        "Flags transcription confidence so low-quality segments are reviewed by a person."
+      ],
+      "localStack": [
+        "Whisper / faster-whisper on the model server GPU, run as a batch queue",
+        "Speaker diarization model (open source) for who-said-what",
+        "PostgreSQL+pgvector or Qdrant for transcript search"
+      ],
+      "dataNeeded": [
+        "Audio exports from your BWC and interview room systems, with case linkage",
+        "Retention and access rules for video evidence",
+        "A sample set with human transcripts to measure word error rate"
+      ],
+      "integration": [
+        "Pulls audio from your evidence management system export or API into a quarantined processing share.",
+        "Writes transcripts back as derived files linked by evidence ID; originals are never modified.",
+        "Access follows the same role filter and audit log as BLADE queries."
+      ],
+      "roi": [
+        "Illustrative, replace with your numbers: hours saved/yr = audio hours/yr x (manual transcription hours per audio hour - review hours per audio hour).",
+        "Example: 500 interview hours x (4 - 1) = 1,500 staff hours per year.",
+        "Search value: investigators find statements in minutes instead of re-watching footage."
+      ],
+      "risks": [
+        "Mis-transcribed words in evidence: transcripts labeled machine-generated, verified against audio before any court use.",
+        "Accents, noise and crosstalk lower accuracy: confidence scores shown, low-confidence segments flagged for review.",
+        "Broader access to sensitive footage: role filtering and audit apply to transcripts exactly as to video."
+      ],
+      "effort": "M",
+      "effortDetail": "Pilot in 6-10 weeks on interview-room recordings for one investigative unit.",
+      "roiRank": 3
+    },
+    {
+      "id": "quality-consistency-checker",
+      "title": "Report Quality & Consistency Checker",
+      "tagline": "Catch report problems before the supervisor does.",
+      "problem": "Supervisors return reports for the same fixable issues: face sheet and narrative disagree, an element of the offense is not described, Miranda is not documented. Each return cycle costs time for the deputy and the supervisor and delays case filing.",
+      "aiApproach": [
+        "Compares face-sheet fields to the narrative (names, times, addresses, property, offense codes) and lists mismatches.",
+        "Checks the narrative against an elements-of-offense checklist for the charged statute.",
+        "Flags missing Miranda notation when a custodial interview is described, and vague or conclusory language.",
+        "Advisory only: the deputy decides what to change; nothing blocks submission."
+      ],
+      "localStack": [
+        "Local LLM with deterministic rule checks for field comparisons",
+        "Elements-of-offense checklists maintained as structured data",
+        "Runs on the same model server as the narrative assistant"
+      ],
+      "dataNeeded": [
+        "RMS report fields and narratives",
+        "Statute elements lists, reviewed by your legal advisor or DA",
+        "Historical supervisor return reasons, to tune and measure"
+      ],
+      "integration": [
+        "Triggered on save or before submit via RMS API, or run on a nightly export as a supervisor queue.",
+        "Results shown as a checklist; no write-back to the RMS.",
+        "Shares prompts, registry and audit trail with the narrative assistant."
+      ],
+      "roi": [
+        "Illustrative, replace with your numbers: hours saved/yr = returned reports/yr x % caught early x minutes per return cycle / 60.",
+        "Example: 3,000 returns x 50% caught x 20 min / 60 = about 500 hours per year.",
+        "Quality value: fewer case declinations for documentation gaps, tracked with your DA's feedback."
+      ],
+      "risks": [
+        "False alarms train users to ignore it: tune thresholds on historical returns before rollout.",
+        "Missed issues create false confidence: positioned as a pre-check, supervisor review unchanged.",
+        "Legal checklists go stale: owned by legal advisor, updated through change control."
+      ],
+      "effort": "S",
+      "effortDetail": "Pilot in 6-8 weeks with one shift's supervisors; low risk because it is advisory only.",
+      "roiRank": 4
+    },
+    {
+      "id": "legacy-data-resurrection",
+      "title": "Legacy Data Resurrection",
+      "tagline": "Turn boxes of paper and microfiche into searchable, linked records.",
+      "problem": "Decades of case files exist only on paper, microfiche or in retired systems. Cold-case review, background investigations and pattern history depend on someone physically finding and reading them.",
+      "aiApproach": [
+        "OCRs scanned pages and keeps per-page confidence and the original image side by side.",
+        "Extracts entities (people, addresses, vehicles, dates, case numbers) and links them to the modern entity graph.",
+        "Makes the archive searchable by keyword and meaning, with role-based access like current records.",
+        "Routes low-confidence pages and handwriting to a human review queue."
+      ],
+      "localStack": [
+        "Tesseract or PaddleOCR on local servers",
+        "Local LLM for entity extraction and document classification",
+        "PostgreSQL+pgvector or Qdrant for search; Neo4j optional for entity links"
+      ],
+      "dataNeeded": [
+        "Scanned images (existing scans or a scanning project)",
+        "Index cards or ledgers that map files to case numbers",
+        "Retention and sealing orders that apply to the archive"
+      ],
+      "integration": [
+        "Batch pipeline from a scanning share; images stay the record of truth, text is derived data.",
+        "Results load into the BLADE store as a separate source tagged LEGACY with OCR confidence.",
+        "Sealed or expunged records flagged at ingest using court-order lists before indexing."
+      ],
+      "roi": [
+        "Illustrative, replace with your numbers: hours saved/yr = archive lookups/yr x minutes saved per lookup / 60.",
+        "Example: 2,000 lookups x 30 min / 60 = about 1,000 hours per year.",
+        "Hard to quantify but real: cold-case leads and links that are invisible while files sit in boxes.",
+        "Scanning cost is the main expense; prioritize by case type and lookup frequency."
+      ],
+      "risks": [
+        "OCR errors produce wrong links: confidence shown, originals one click away, links marked as suggested.",
+        "Sealed or expunged records resurfacing: apply court-order lists at ingest and audit every view.",
+        "Scope creep across the whole archive: pilot one record series with clear lookup demand."
+      ],
+      "effort": "L",
+      "effortDetail": "Pilot in 10-14 weeks on one record series; full archive is a multi-phase project driven by scanning capacity.",
+      "roiRank": 5
+    },
+    {
+      "id": "pattern-explorer",
+      "title": "Pattern Explorer & Internal Analytics",
+      "tagline": "Series, hot spots and time patterns in plain English, for analysts and command staff.",
+      "problem": "Spotting a burglary series or a shift in call patterns depends on a few analysts who are also pulled into ad-hoc requests. Command staff briefings take hours to assemble from multiple systems.",
+      "aiApproach": [
+        "Finds candidate series by matching MO, location, time and property across RMS, CAD, pawn and LPR records.",
+        "Summarizes hot spots and day/time patterns as plain-English briefings with cited records and maps.",
+        "Answers ad-hoc questions through the same filtered, audited query path shown in the POC.",
+        "Explicitly not predictive person-level risk scoring; analysis is about incidents and places, reviewed by analysts."
+      ],
+      "localStack": [
+        "BLADE hybrid retrieval and entity graph (already in the POC)",
+        "Local LLM for summaries; deterministic SQL for counts and statistics",
+        "Open-source GIS libraries for maps"
+      ],
+      "dataNeeded": [
+        "RMS incidents with NIBRS codes and geocoded locations",
+        "CAD calls for service",
+        "Pawn, LPR and field interview data where policy allows"
+      ],
+      "integration": [
+        "Reads from the same read-only replicas as the POC; no new source connections beyond those.",
+        "Briefing output exported as PDF or document for existing command staff meetings.",
+        "Counts come from SQL, not the model, so numbers match your existing reports."
+      ],
+      "roi": [
+        "Illustrative, replace with your numbers: hours saved/yr = briefings/yr x hours per briefing x % reduction.",
+        "Example: 52 weekly briefings x 6 hours x 50% = 156 analyst hours per year, plus faster ad-hoc answers.",
+        "Operational value: series identified sooner, measured by time from first incident to link."
+      ],
+      "risks": [
+        "Spurious patterns: model proposes, analyst confirms; counts and statistics computed in code.",
+        "Civil-liberties concerns: no person-level risk scores, bias review of use cases, public AI-use policy.",
+        "Garbage-in from inconsistent coding: data quality report alongside every briefing."
+      ],
+      "effort": "M",
+      "effortDetail": "Pilot in 8-10 weeks with the crime analysis unit, building directly on the POC.",
+      "roiRank": 6
+    },
+    {
+      "id": "jail-intelligence",
+      "title": "Jail / Inmate Intelligence Helper",
+      "tagline": "Booking summaries, classification consistency and release verification for detention staff.",
+      "problem": "Detention staff must reconcile charges, holds, warrants, prior bookings and keep-separate orders under time pressure. An error in release date or a missed hold can mean an erroneous release; a missed keep-separate can mean an assault.",
+      "aiApproach": [
+        "Summarizes a new booking with prior bookings, active holds and known associates, each item cited to the source record.",
+        "Checks classification inputs against policy and flags inconsistencies for the classification officer.",
+        "Surfaces keep-separate conflicts from gang, co-defendant and victim relationships in the entity graph.",
+        "Before release, lists holds, detainers and sentence calculations that need human verification; staff complete the checklist."
+      ],
+      "localStack": [
+        "BLADE entity graph and retrieval over JMS and RMS replicas",
+        "Local LLM for summaries; date and sentence arithmetic in code, not the model",
+        "Same audit log and role filters as the POC"
+      ],
+      "dataNeeded": [
+        "JMS bookings, charges, holds, detainers and housing",
+        "Classification policy and keep-separate orders",
+        "Medical flags only if approved, under HIPAA and 42 CFR Part 2 where applicable"
+      ],
+      "integration": [
+        "Read-only feed from the JMS replica, near real time for bookings and releases.",
+        "Booking summary and release checklist displayed beside the JMS screen; no automated release decisions.",
+        "Medical and substance-use data segregated, visible only to authorized medical roles."
+      ],
+      "roi": [
+        "Illustrative, replace with your numbers: hours saved/yr = bookings/day x minutes saved per booking x 365 / 60.",
+        "Example: 40 bookings/day x 5 min x 365 / 60 = about 1,200 hours per year.",
+        "Cost avoidance: one prevented erroneous release or in-custody assault can outweigh the project cost; use your own incident history."
+      ],
+      "risks": [
+        "Wrong release date or missed hold: math done in code, checklist requires staff sign-off, never auto-releases.",
+        "Medical privacy: HIPAA and 42 CFR Part 2 controls, separate role, minimal medical surfacing.",
+        "Classification bias: model flags inconsistencies only; classification decisions stay with trained staff."
+      ],
+      "effort": "M",
+      "effortDetail": "Pilot in 10-12 weeks on booking summaries first, release verification second.",
+      "roiRank": 7
+    },
+    {
+      "id": "training-knowledge-base",
+      "title": "Policy, Training & Historical Case Knowledge Base",
+      "tagline": "Ask the policy manual, training bulletins and lessons learned, with citations.",
+      "problem": "Policy manuals, general orders, training bulletins and legal updates are spread across PDFs and shares. Deputies call a sergeant or guess, and new hires take time to find what applies.",
+      "aiApproach": [
+        "Answers policy questions with citations to the specific section (already working in the POC).",
+        "Adds training bulletins, legal updates and after-action lessons learned as sources.",
+        "Shows effective dates so superseded versions are not cited as current.",
+        "Says when no policy covers a question, rather than improvising."
+      ],
+      "localStack": [
+        "BLADE RAG pipeline and citation guard, as demonstrated",
+        "nomic-embed-text or similar local embedding model",
+        "Document conversion and OCR (Tesseract) for scanned bulletins"
+      ],
+      "dataNeeded": [
+        "Current policy manual and general orders with version history",
+        "Training bulletins, legal updates and approved after-action reviews",
+        "Owner for each document set to keep it current"
+      ],
+      "integration": [
+        "Indexes documents from your existing policy management system export or file share.",
+        "Re-indexes on publication; superseded versions retained but marked.",
+        "Available to all sworn and civilian staff with the same audit log."
+      ],
+      "roi": [
+        "Illustrative, replace with your numbers: hours saved/yr = staff x lookups/week x minutes saved x 50 weeks / 60.",
+        "Example: 200 staff x 1 lookup/week x 10 min x 50 / 60 = about 1,700 hours per year.",
+        "Liability value: fewer actions taken on outdated or misremembered policy."
+      ],
+      "risks": [
+        "Citing outdated policy: effective-date metadata and supersession tracking.",
+        "Answer treated as legal advice: policy citations only, links to the source text, legal questions routed to counsel.",
+        "Incomplete corpus: document owners and a coverage report."
+      ],
+      "effort": "S",
+      "effortDetail": "Pilot in 4-6 weeks; the core pipeline already exists in the POC.",
+      "roiRank": 8
+    },
+    {
+      "id": "dispatch-assist",
+      "title": "Dispatch / CAD Assist",
+      "tagline": "Premise history and officer-safety flags summarized for responding units in seconds.",
+      "problem": "Dispatchers juggle the call, radio traffic and multiple lookups. Premise history and prior officer-safety information exist in CAD and RMS, but pulling them together while units are en route is hard.",
+      "aiApproach": [
+        "Summarizes premise and person history for the call location: prior calls, weapons involvement, officer-safety flags, active orders.",
+        "Summarizes long call narratives for shift change or unit handoff.",
+        "Each line cites the source call or report; the dispatcher decides what to relay.",
+        "No call prioritization or unit assignment by the model."
+      ],
+      "localStack": [
+        "BLADE retrieval over CAD and RMS replicas with near-real-time ingestion",
+        "Small, fast local LLM tuned for low latency",
+        "Deterministic queries for flags; model only for summarization"
+      ],
+      "dataNeeded": [
+        "CAD call history with geocoded addresses",
+        "RMS officer-safety flags, protective orders and warrants",
+        "Dispatch SOPs on what may be broadcast"
+      ],
+      "integration": [
+        "Separate panel on the dispatch workstation keyed off the CAD incident number; no write-back to CAD.",
+        "Latency budget of a few seconds; falls back to standard lookups if unavailable.",
+        "Must not run on or interfere with the CAD host; served from the BLADE API."
+      ],
+      "roi": [
+        "Illustrative, replace with your numbers: hours saved/yr = calls with history/yr x seconds saved / 3600.",
+        "Example: 30,000 calls x 45 seconds / 3600 = about 375 dispatcher hours per year.",
+        "Primary value is officer safety and better-informed responses, which you should evaluate qualitatively with dispatch and patrol."
+      ],
+      "risks": [
+        "Missed or stale safety flag: flags come from deterministic queries, not the model; summary shows record dates.",
+        "Distraction during critical calls: optional panel, designed with dispatchers, disabled on high-priority calls if desired.",
+        "Availability dependency: CAD operations never depend on BLADE; standard lookups always remain."
+      ],
+      "effort": "L",
+      "effortDetail": "Pilot in 12-16 weeks with a dispatch working group; requires near-real-time CAD feed and latency testing.",
+      "roiRank": 9
+    },
+    {
+      "id": "case-packet-builder",
+      "title": "Court / Case Packet Builder",
+      "tagline": "Assemble the timeline, evidence list and witness list for the DA, with a discovery checklist.",
+      "problem": "Investigators assemble case packets by hand from reports, supplements, evidence logs and recordings. Missing items lead to DA follow-up requests, delays and discovery problems.",
+      "aiApproach": [
+        "Builds a chronological timeline from reports, CAD, bookings and evidence entries, each event cited.",
+        "Compiles evidence and witness lists from linked records.",
+        "Drafts a case summary for investigator review and signature.",
+        "Runs a discovery completeness checklist, including Brady/Giglio flags your agency tracks, and lists gaps."
+      ],
+      "localStack": [
+        "BLADE entity graph and retrieval across RMS, CAD, JMS and evidence data",
+        "Local LLM for summary drafting; lists built from structured data",
+        "Document generation to PDF or Word on the server"
+      ],
+      "dataNeeded": [
+        "RMS reports and supplements, evidence management records",
+        "Your DA's packet requirements and discovery checklist",
+        "Brady/Giglio tracking process, as defined by counsel"
+      ],
+      "integration": [
+        "Investigator selects a case; BLADE generates a draft packet for review.",
+        "Final packet exported in the format your DA accepts; no automatic transmission.",
+        "Packet contents and versions recorded in the audit log for discovery."
+      ],
+      "roi": [
+        "Illustrative, replace with your numbers: hours saved/yr = cases filed/yr x hours to assemble x % reduction.",
+        "Example: 1,200 cases x 2 hours x 50% = 1,200 investigator hours per year.",
+        "Quality value: fewer DA follow-up requests, tracked against a pre-pilot baseline."
+      ],
+      "risks": [
+        "Omitted evidence or witness: completeness checklist and investigator sign-off; packet is a draft until approved.",
+        "Inaccurate summary: citations on every statement; investigator remains responsible.",
+        "Brady/Giglio handling errors: process owned by counsel; tool only surfaces flags already recorded."
+      ],
+      "effort": "M",
+      "effortDetail": "Pilot in 10-12 weeks with one investigative unit and your DA's office.",
+      "roiRank": 10
+    }
+  ],
+  "roiSummary": {
+    "intro": "The ranking weighs time returned to deputies and staff against feasibility, data readiness and risk. The top items reuse the same local model server, audit log and role filters, so each additional use case costs less than the first. All figures here are illustrative formulas; your own volumes and timings will set the real numbers.",
+    "notes": "Before any pilot, measure a baseline for two to four weeks (minutes per report, hours per records request, return rates, lookup times), then measure the same metrics during the pilot with the same unit. Count review and correction time honestly, so the result reflects net time saved, not drafting speed alone."
+  }
+}

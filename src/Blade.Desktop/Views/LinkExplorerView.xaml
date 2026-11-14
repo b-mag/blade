@@ -1,0 +1,101 @@
+<UserControl x:Class="Blade.Desktop.Views.LinkExplorerView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="clr-namespace:Blade.Desktop.Controls"
+             xmlns:sys="clr-namespace:System;assembly=System.Runtime">
+    <Grid Margin="22,16,22,16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="330"/>
+        </Grid.ColumnDefinitions>
+
+        <StackPanel Grid.ColumnSpan="2">
+            <TextBlock Style="{StaticResource H1}" Text="Link Explorer"/>
+            <TextBlock Style="{StaticResource MutedText}" Text="The entity graph behind GraphRAG: people, vehicles, phones, incidents, field interviews, bookings and pawn records from separate systems, joined by explicit, explainable relationships."/>
+            <DockPanel Margin="0,12,0,0">
+                <Button DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Command="{Binding SearchCommand}" Margin="8,0,0,0" Padding="18,8" IsDefault="True" Content="Explore"/>
+                <TextBox Text="{Binding Query, UpdateSourceTrigger=PropertyChanged}" FontSize="15" Padding="12,9"
+                         ToolTip="Case number, plate, phone, FI/booking/pawn number, or a person's name"/>
+            </DockPanel>
+            <DockPanel Margin="0,8,0,0">
+                <TextBlock DockPanel.Dock="Left" Text="Try:" Foreground="{StaticResource Muted}" Margin="0,4,8,0"/>
+                <ItemsControl ItemsSource="{Binding Samples}">
+                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Button Style="{StaticResource ChipButton}" Content="{Binding}" Command="{Binding DataContext.SampleCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </DockPanel>
+            <Border Background="{StaticResource DangerSoft}" CornerRadius="6" Padding="12,8" Margin="0,4,0,0" Visibility="{Binding Error, Converter={StaticResource VisibleWhen}}">
+                <TextBlock Text="{Binding Error}" Foreground="{StaticResource Danger}" TextWrapping="Wrap"/>
+            </Border>
+        </StackPanel>
+
+        <Border Grid.Row="1" Margin="0,10,0,0" Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="8">
+            <Grid>
+                <c:GraphCanvas Graph="{Binding Graph}" SelectedNode="{Binding SelectedNode}" ActivateCommand="{Binding ExpandCommand}"/>
+                <TextBlock Text="{Binding Stats}" Margin="12,8" FontSize="11.5" Foreground="{StaticResource Muted}" VerticalAlignment="Top" IsHitTestVisible="False"/>
+                <TextBlock Text="Drag to arrange · click to inspect · double-click to expand" Margin="12,8" FontSize="11" Foreground="{StaticResource Muted}"
+                           VerticalAlignment="Bottom" HorizontalAlignment="Left" IsHitTestVisible="False"/>
+                <ProgressBar IsIndeterminate="True" Height="3" VerticalAlignment="Top" Foreground="{StaticResource Accent}" Background="Transparent" BorderThickness="0"
+                             Visibility="{Binding IsBusy, Converter={StaticResource VisibleWhen}}"/>
+                <TextBlock Text="Search for a plate, person, phone or case — or open the connections from an Ask BLADE answer." HorizontalAlignment="Center" VerticalAlignment="Center"
+                           Foreground="{StaticResource Muted}" Visibility="{Binding Graph, Converter={StaticResource VisibleWhen}, ConverterParameter=invert}"/>
+            </Grid>
+        </Border>
+
+        <ScrollViewer Grid.Row="1" Grid.Column="1" Margin="12,10,0,0" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <Border Style="{StaticResource CardBorder}" Visibility="{Binding SelectedNode, Converter={StaticResource VisibleWhen}}">
+                    <StackPanel>
+                        <Border Style="{StaticResource Badge}" HorizontalAlignment="Left" Background="{Binding SelectedNode.Kind, Converter={StaticResource KindBrush}}">
+                            <TextBlock Text="{Binding SelectedNode.Kind}" FontSize="9.5" FontWeight="Bold" Foreground="#0B1220"/>
+                        </Border>
+                        <TextBlock Style="{StaticResource H2}" Text="{Binding SelectedNode.Label}" Margin="0,6,0,0"/>
+                        <TextBlock Style="{StaticResource MutedText}" Text="{Binding SelectedNode.Detail}" FontSize="12" Margin="0,4,0,0"
+                                   Visibility="{Binding SelectedNode.Detail, Converter={StaticResource VisibleWhen}}"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <Button Content="Expand" Command="{Binding ExpandCommand}" Margin="0,0,6,0"/>
+                            <Button Content="Open report" Command="{Binding OpenCommand}"/>
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource Label}" Text="RELATIONSHIPS" Margin="0,12,0,4"/>
+                        <ItemsControl ItemsSource="{Binding SelectedEdges}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate><TextBlock Text="{Binding StringFormat=• {0}}" FontSize="12" TextWrapping="Wrap" Margin="0,1"/></DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource CardBorder}" Margin="0,10,0,0">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource Label}" Text="LEGEND"/>
+                        <ItemsControl Margin="0,6,0,0">
+                            <ItemsControl.ItemsSource>
+                                <x:Array Type="{x:Type sys:String}">
+                                    <sys:String>INCIDENT</sys:String><sys:String>PERSON</sys:String><sys:String>VEHICLE</sys:String><sys:String>PHONE</sys:String>
+                                    <sys:String>FIELDINTERVIEW</sys:String><sys:String>BOOKING</sys:String><sys:String>PAWN</sys:String><sys:String>LOCATION</sys:String><sys:String>SERIES</sys:String>
+                                </x:Array>
+                            </ItemsControl.ItemsSource>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal" Margin="0,2">
+                                        <Border Width="12" Height="12" CornerRadius="3" Background="{Binding Converter={StaticResource KindBrush}}" Margin="0,0,8,0"/>
+                                        <TextBlock Text="{Binding}" FontSize="11.5"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Style="{StaticResource MutedText}" FontSize="11.5" Margin="0,10,0,0"
+                                   Text="Derived links include plates and phone numbers extracted from narrative text, LPR reads within 45 min before / 60 min after an incident in the same district, and pawned serial numbers matching reported stolen property. Restricted records are removed for your role before the graph is built."/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>
