@@ -1,4 +1,7 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.Http.Features;
+using Microsoft.Extensions.Options;
 using Blade.Core;
 using Blade.Server;
 using Blade.Server.Ai;
@@ -62,15 +65,7 @@ api.MapPost("/ask", async (AskRequest req, HttpContext http, AskService ask, Aud
     try
     {
         var o = await ask.AskAsync(req, user.Role, ct);
-        var id = audit.Write(new AuditWrite(user, "ASK", req.Question,
-            Detail: System.Text.Json.JsonSerializer.Serialize(o.Response.Filter),
-            RecordsReturned: o.Response.Results.Select(r => r.CaseNumber),
-            RecordsCited: o.Response.Citations.Where(c => c.Verified).Select(c => c.Id),
-            Provider: o.Response.Trace.Provider, Model: o.Response.Trace.Model,
-            LatencyMs: (long)(DateTime.UtcNow - started).TotalMilliseconds,
-            PromptTokens: o.Response.Trace.PromptTokens, CompletionTokens: o.Response.Trace.CompletionTokens,
-            Outcome: o.Response.Citations.Any(c => !c.Verified) ? "OK_UNVERIFIED_CITATIONS" : "OK"));
-        return Results.Ok(o.Response with { AuditId = id });
+        return Results.Ok(o.Response with { AuditId = AuditAsk(audit, user, req, o.Response, started) });
     }
     catch (Exception ex) when (ex is not OperationCanceledException)
     {
@@ -87,19 +82,53 @@ api.MapPost("/policy", async (PolicyRequest req, HttpContext http, PolicyService
     try
     {
         var o = await policy.AskAsync(req, user.Role, ct);
-        var id = audit.Write(new AuditWrite(user, "POLICY_QUERY", req.Question,
-            RecordsReturned: o.Response.Sections.Select(s => "Policy " + s.SectionNumber).Concat(o.Response.RelatedCases.Select(c => c.CaseNumber)),
-            RecordsCited: o.Response.Citations.Where(c => c.Verified).Select(c => c.Id),
-            Provider: o.Response.Trace.Provider, Model: o.Response.Trace.Model,
-            LatencyMs: (long)(DateTime.UtcNow - started).TotalMilliseconds,
-            PromptTokens: o.Response.Trace.PromptTokens, CompletionTokens: o.Response.Trace.CompletionTokens));
-        return Results.Ok(o.Response with { AuditId = id });
+        return Results.Ok(o.Response with { AuditId = AuditPolicy(audit, user, req, o.Response, started) });
     }
     catch (Exception ex) when (ex is not OperationCanceledException)
     {
         audit.Write(new AuditWrite(user, "POLICY_QUERY", req.Question, Detail: ex.Message, Outcome: "ERROR"));
         return Results.Problem(ex.Message, title: "AI service error");
     }
+});
+
+// Streaming variants: newline-delimited JSON (StreamEvent<T>), same role checks, same audit entry.
+api.MapPost("/ask/stream", async (AskRequest req, HttpContext http, AskService ask, AuditLog audit, IOptions<Microsoft.AspNetCore.Http.Json.JsonOptions> json, CancellationToken ct) =>
+{
+    var user = UserContext.From(http);
+    if (string.IsNullOrWhiteSpace(req.Question) && req.FilterOverride is null) return Results.BadRequest("Question is required.");
+    if (user.Role == Roles.Auditor) return Deny(audit, user, "ASK", req.Question);
+    var started = DateTime.UtcNow;
+    var send = StartStream<AskResponse>(http, json.Value.SerializerOptions, ct);
+    try
+    {
+        var o = await ask.AskAsync(req, user.Role, ct, send);
+        await send(new StreamEvent<AskResponse>(StreamEventTypes.Done, Response: o.Response with { AuditId = AuditAsk(audit, user, req, o.Response, started) }));
+    }
+    catch (Exception ex) when (ex is not OperationCanceledException)
+    {
+        audit.Write(new AuditWrite(user, "ASK", req.Question, Detail: ex.Message, Outcome: "ERROR"));
+        await send(new StreamEvent<AskResponse>(StreamEventTypes.Error, Error: ex.Message));
+    }
+    return Results.Empty;
+});
+
+api.MapPost("/policy/stream", async (PolicyRequest req, HttpContext http, PolicyService policy, AuditLog audit, IOptions<Microsoft.AspNetCore.Http.Json.JsonOptions> json, CancellationToken ct) =>
+{
+    var user = UserContext.From(http);
+    if (string.IsNullOrWhiteSpace(req.Question)) return Results.BadRequest("Question is required.");
+    var started = DateTime.UtcNow;
+    var send = StartStream<PolicyResponse>(http, json.Value.SerializerOptions, ct);
+    try
+    {
+        var o = await policy.AskAsync(req, user.Role, ct, send);
+        await send(new StreamEvent<PolicyResponse>(StreamEventTypes.Done, Response: o.Response with { AuditId = AuditPolicy(audit, user, req, o.Response, started) }));
+    }
+    catch (Exception ex) when (ex is not OperationCanceledException)
+    {
+        audit.Write(new AuditWrite(user, "POLICY_QUERY", req.Question, Detail: ex.Message, Outcome: "ERROR"));
+        await send(new StreamEvent<PolicyResponse>(StreamEventTypes.Error, Error: ex.Message));
+    }
+    return Results.Empty;
 });
 
 api.MapGet("/incidents/{caseNumber}", (string caseNumber, HttpContext http, AuditLog audit) =>
@@ -169,6 +198,38 @@ static IResult Deny(AuditLog audit, UserContext user, string action, string? que
     return Results.Json(new { error = $"Access denied for role {user.Role}. This attempt has been logged." }, statusCode: StatusCodes.Status403Forbidden);
 }
 
+static long AuditAsk(AuditLog audit, UserContext user, AskRequest req, AskResponse r, DateTime started) =>
+    audit.Write(new AuditWrite(user, "ASK", req.Question,
+        Detail: JsonSerializer.Serialize(r.Filter),
+        RecordsReturned: r.Results.Select(x => x.CaseNumber),
+        RecordsCited: r.Citations.Where(c => c.Verified).Select(c => c.Id),
+        Provider: r.Trace.Provider, Model: r.Trace.Model,
+        LatencyMs: (long)(DateTime.UtcNow - started).TotalMilliseconds,
+        PromptTokens: r.Trace.PromptTokens, CompletionTokens: r.Trace.CompletionTokens,
+        Outcome: r.Citations.Any(c => !c.Verified) ? "OK_UNVERIFIED_CITATIONS" : "OK"));
+
+static long AuditPolicy(AuditLog audit, UserContext user, PolicyRequest req, PolicyResponse r, DateTime started) =>
+    audit.Write(new AuditWrite(user, "POLICY_QUERY", req.Question,
+        RecordsReturned: r.Sections.Select(s => "Policy " + s.SectionNumber).Concat(r.RelatedCases.Select(c => c.CaseNumber)),
+        RecordsCited: r.Citations.Where(c => c.Verified).Select(c => c.Id),
+        Provider: r.Trace.Provider, Model: r.Trace.Model,
+        LatencyMs: (long)(DateTime.UtcNow - started).TotalMilliseconds,
+        PromptTokens: r.Trace.PromptTokens, CompletionTokens: r.Trace.CompletionTokens));
+
+/// <summary>Starts an unbuffered NDJSON response; the returned function writes and flushes one event per line.</summary>
+static Func<StreamEvent<T>, Task> StartStream<T>(HttpContext http, JsonSerializerOptions json, CancellationToken ct) where T : class
+{
+    http.Response.ContentType = "application/x-ndjson; charset=utf-8";
+    http.Response.Headers.CacheControl = "no-cache";
+    http.Features.Get<IHttpResponseBodyFeature>()?.DisableBuffering();
+    return async e =>
+    {
+        await JsonSerializer.SerializeAsync(http.Response.Body, e, json, ct);
+        await http.Response.Body.WriteAsync(NewLine, ct);
+        await http.Response.Body.FlushAsync(ct);
+    };
+}
+
 static string FindRepoRoot(string start)
 {
     var dir = new DirectoryInfo(start);
@@ -176,4 +237,7 @@ static string FindRepoRoot(string start)
     return dir?.FullName ?? start;
 }
 
-public partial class Program;
+public partial class Program
+{
+    private static readonly ReadOnlyMemory<byte> NewLine = "\n"u8.ToArray();
+}

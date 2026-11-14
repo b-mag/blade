@@ -21,6 +21,17 @@ public interface ILlmClient
     string Model { get; }
     bool IsLocal { get; }
     Task<LlmResult> CompleteAsync(LlmRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// Like <see cref="CompleteAsync"/> but reports text as it is generated. Providers without streaming
+    /// deliver the whole answer as a single chunk.
+    /// </summary>
+    async Task<LlmResult> StreamAsync(LlmRequest request, Func<string, Task> onDelta, CancellationToken ct = default)
+    {
+        var r = await CompleteAsync(request, ct);
+        await onDelta(r.Text);
+        return r;
+    }
 }
 
 public static partial class LlmText
@@ -39,10 +50,60 @@ public sealed class OllamaLlmClient(HttpClient http, AiOptions o) : ILlmClient
     public async Task<LlmResult> CompleteAsync(LlmRequest req, CancellationToken ct = default)
     {
         var sw = Stopwatch.StartNew();
+        using var resp = await http.PostAsync($"{o.OllamaUrl.TrimEnd('/')}/api/chat",
+            new StringContent(Body(req, stream: false).ToJsonString(), Encoding.UTF8, "application/json"), ct);
+        var text = await resp.Content.ReadAsStringAsync(ct);
+        if (!resp.IsSuccessStatusCode) throw new InvalidOperationException($"Ollama error {(int)resp.StatusCode}: {text}");
+        var doc = JsonNode.Parse(text)!;
+        return new LlmResult(
+            LlmText.Clean(doc["message"]?["content"]?.GetValue<string>() ?? ""),
+            Provider, o.ChatModel, true,
+            doc["prompt_eval_count"]?.GetValue<int>() ?? 0,
+            doc["eval_count"]?.GetValue<int>() ?? 0,
+            sw.ElapsedMilliseconds);
+    }
+
+    /// <summary>Ollama streams one JSON object per line; the last one (done=true) carries the token counts.</summary>
+    public async Task<LlmResult> StreamAsync(LlmRequest req, Func<string, Task> onDelta, CancellationToken ct = default)
+    {
+        var sw = Stopwatch.StartNew();
+        using var msg = new HttpRequestMessage(HttpMethod.Post, $"{o.OllamaUrl.TrimEnd('/')}/api/chat")
+        {
+            Content = new StringContent(Body(req, stream: true).ToJsonString(), Encoding.UTF8, "application/json"),
+        };
+        using var resp = await http.SendAsync(msg, HttpCompletionOption.ResponseHeadersRead, ct);
+        if (!resp.IsSuccessStatusCode) throw new InvalidOperationException($"Ollama error {(int)resp.StatusCode}: {await resp.Content.ReadAsStringAsync(ct)}");
+
+        var full = new StringBuilder();
+        int promptTokens = 0, completionTokens = 0;
+        using var reader = new StreamReader(await resp.Content.ReadAsStreamAsync(ct));
+        while (await reader.ReadLineAsync(ct) is { } line)
+        {
+            if (line.Length == 0) continue;
+            var doc = JsonNode.Parse(line)!;
+            if (doc["error"]?.GetValue<string>() is { } err) throw new InvalidOperationException($"Ollama error: {err}");
+            var piece = doc["message"]?["content"]?.GetValue<string>() ?? "";
+            if (piece.Length > 0)
+            {
+                full.Append(piece);
+                await onDelta(piece);
+            }
+            if (doc["done"]?.GetValue<bool>() == true)
+            {
+                promptTokens = doc["prompt_eval_count"]?.GetValue<int>() ?? 0;
+                completionTokens = doc["eval_count"]?.GetValue<int>() ?? 0;
+                break;
+            }
+        }
+        return new LlmResult(LlmText.Clean(full.ToString()), Provider, o.ChatModel, true, promptTokens, completionTokens, sw.ElapsedMilliseconds);
+    }
+
+    private JsonObject Body(LlmRequest req, bool stream)
+    {
         var body = new JsonObject
         {
             ["model"] = o.ChatModel,
-            ["stream"] = false,
+            ["stream"] = stream,
             ["think"] = false,
             ["keep_alive"] = o.KeepAlive,
             ["options"] = new JsonObject
@@ -58,18 +119,7 @@ public sealed class OllamaLlmClient(HttpClient http, AiOptions o) : ILlmClient
             },
         };
         if (req.JsonSchema is not null) body["format"] = req.JsonSchema.DeepClone();
-
-        using var resp = await http.PostAsync($"{o.OllamaUrl.TrimEnd('/')}/api/chat",
-            new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json"), ct);
-        var text = await resp.Content.ReadAsStringAsync(ct);
-        if (!resp.IsSuccessStatusCode) throw new InvalidOperationException($"Ollama error {(int)resp.StatusCode}: {text}");
-        var doc = JsonNode.Parse(text)!;
-        return new LlmResult(
-            LlmText.Clean(doc["message"]?["content"]?.GetValue<string>() ?? ""),
-            Provider, o.ChatModel, true,
-            doc["prompt_eval_count"]?.GetValue<int>() ?? 0,
-            doc["eval_count"]?.GetValue<int>() ?? 0,
-            sw.ElapsedMilliseconds);
+        return body;
     }
 
     /// <summary>Loads the chat and embedding models into GPU memory so the first demo question is fast.</summary>

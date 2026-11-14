@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Text;
 using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -20,6 +21,10 @@ public abstract class AiPageViewModel : ObservableObject
     private AiTrace? _trace;
     private bool _showTrace;
     private string _question = "";
+    private string? _phase;
+    private bool _streaming;
+    private readonly StringBuilder _streamText = new();
+    private readonly Stopwatch _sinceRender = new();
 
     protected AiPageViewModel(MainViewModel main)
     {
@@ -31,7 +36,14 @@ public abstract class AiPageViewModel : ObservableObject
     public string Question { get => _question; set => Set(ref _question, value); }
     public bool IsBusy { get => _busy; private set { Set(ref _busy, value); OnPropertyChanged(nameof(BusyText)); } }
     public string Elapsed => $"{_sw.Elapsed.TotalSeconds:F1} s";
-    public string BusyText => $"Working on {Main.System?.ChatModel ?? "the model"} via {Main.System?.Provider ?? "server"} — nothing leaves this network.";
+    public string BusyText => $"{_phase ?? "Working"} · {Main.System?.ChatModel ?? "the model"} via {Main.System?.Provider ?? "server"}, nothing leaves this network.";
+
+    /// <summary>What the server is doing right now (shown in the busy bar).</summary>
+    protected string? Phase { get => _phase; set { _phase = value; OnPropertyChanged(nameof(BusyText)); } }
+
+    /// <summary>True while answer text is arriving; citations become clickable and verified once it completes.</summary>
+    public bool IsStreaming { get => _streaming; protected set { if (Set(ref _streaming, value)) OnStreamingChanged(); } }
+    protected virtual void OnStreamingChanged() { }
     public string? Error { get => _error; protected set => Set(ref _error, value); }
     public FlowDocument? Answer { get => _answer; protected set => Set(ref _answer, value); }
     public AiTrace? Trace { get => _trace; protected set { Set(ref _trace, value); OnPropertyChanged(nameof(HasTrace)); } }
@@ -58,8 +70,28 @@ public abstract class AiPageViewModel : ObservableObject
         }
     }
 
-    protected static FlowDocument Render(string markdown) => MarkdownRenderer.Render(markdown,
-        (Brush)App.Current.Resources["Text"], (Brush)App.Current.Resources["Accent"], (Brush)App.Current.Resources["Danger"]);
+    protected static FlowDocument Render(string markdown, bool interactive = true) => MarkdownRenderer.Render(markdown,
+        (Brush)App.Current.Resources["Text"], (Brush)App.Current.Resources["Accent"], (Brush)App.Current.Resources["Danger"], interactive);
+
+    /// <summary>Clears streamed text and shows a placeholder until the first words arrive.</summary>
+    protected void ResetStream(string placeholder)
+    {
+        _streamText.Clear();
+        _sinceRender.Restart();
+        Answer = Render($"*{placeholder}*", interactive: false);
+    }
+
+    /// <summary>Adds streamed text; re-renders at most every ~120 ms so long answers stay smooth.</summary>
+    protected void AppendStream(string text)
+    {
+        _streamText.Append(text);
+        if (_sinceRender.ElapsedMilliseconds < 120) return;
+        _sinceRender.Restart();
+        var md = _streamText.ToString();
+        // Close a dangling bold marker so half-written headings don't flash as raw asterisks.
+        if ((md.Length - md.Replace("**", "").Length) / 2 % 2 == 1) md += "**";
+        Answer = Render(md + " ▍", interactive: false);
+    }
 
     protected void SetWarnings(IEnumerable<string> w)
     {
@@ -101,7 +133,11 @@ public sealed class AskViewModel : AiPageViewModel
     public AskResponse? Response { get => _response; private set { Set(ref _response, value); OnPropertyChanged(nameof(HasResponse)); OnPropertyChanged(nameof(Summary)); } }
     public bool HasResponse => _response is not null;
     public string Summary => _response is null ? "" :
-        $"{_response.TotalMatches} matching incidents{(_response.Withheld > 0 ? $" · {_response.Withheld} withheld for your role" : "")} · {_response.Citations.Count(c => c.Verified)} verified citations{(_response.Citations.Any(c => !c.Verified) ? $" · {_response.Citations.Count(c => !c.Verified)} UNVERIFIED" : "")} · audit #{_response.AuditId}";
+        $"{_response.TotalMatches} matching incidents{(_response.Withheld > 0 ? $" · {_response.Withheld} withheld for your role" : "")} · " +
+        (IsStreaming ? "writing answer…" :
+        $"{_response.Citations.Count(c => c.Verified)} verified citations{(_response.Citations.Any(c => !c.Verified) ? $" · {_response.Citations.Count(c => !c.Verified)} UNVERIFIED" : "")} · audit #{_response.AuditId}");
+
+    protected override void OnStreamingChanged() => OnPropertyChanged(nameof(Summary));
 
     // Filter editor ("human in the loop": the user can correct the model's interpretation)
     public bool EditFilter { get => _editFilter; set => Set(ref _editFilter, value); }
@@ -116,12 +152,44 @@ public sealed class AskViewModel : AiPageViewModel
 
     private async Task SendAsync(SearchFilter? filter)
     {
-        var r = await Main.Api.AskAsync(new AskRequest(Question, filter));
-        Response = r;
-        Answer = Render(r.Answer);
-        Trace = r.Trace;
-        SetWarnings(r.Warnings);
-        LoadFilter(r.Filter);
+        Phase = filter is null ? "Interpreting the question and searching records" : "Searching records with your filter";
+        try
+        {
+            var r = await Main.Api.AskStreamAsync(new AskRequest(Question, filter), e =>
+            {
+                switch (e.Type)
+                {
+                    case StreamEventTypes.Context when e.Response is { } partial:
+                        // Results, series and connections are computed in code, so they can be shown before the model writes.
+                        IsStreaming = true;
+                        Response = partial;
+                        Trace = partial.Trace;
+                        SetWarnings(partial.Warnings);
+                        LoadFilter(partial.Filter);
+                        ResetStream("Writing a grounded answer from the records on the right…");
+                        Phase = "Writing the answer";
+                        break;
+                    case StreamEventTypes.Delta when e.Text is { } t:
+                        AppendStream(t);
+                        break;
+                    case StreamEventTypes.Reset:
+                        ResetStream(e.Text ?? "Regenerating the answer…");
+                        Phase = "Regenerating the answer (citation check)";
+                        break;
+                }
+            });
+            IsStreaming = false;
+            Response = r;
+            Answer = Render(r.Answer);
+            Trace = r.Trace;
+            SetWarnings(r.Warnings);
+            LoadFilter(r.Filter);
+        }
+        finally
+        {
+            IsStreaming = false;
+            Phase = null;
+        }
     }
 
     private void LoadFilter(SearchFilter f)
@@ -158,11 +226,37 @@ public sealed class PolicyViewModel : AiPageViewModel
         Question = Samples[0];
         AskCommand = new AsyncCommand(() => RunAsync(async () =>
         {
-            var r = await Main.Api.PolicyAsync(new PolicyRequest(Question));
-            Response = r;
-            Answer = Render(r.Answer);
-            Trace = r.Trace;
-            SetWarnings(r.Warnings);
+            Phase = "Searching the policy manual";
+            try
+            {
+                var r = await Main.Api.PolicyStreamAsync(new PolicyRequest(Question), e =>
+                {
+                    switch (e.Type)
+                    {
+                        case StreamEventTypes.Context when e.Response is { } partial:
+                            IsStreaming = true;
+                            Response = partial;
+                            Trace = partial.Trace;
+                            SetWarnings(partial.Warnings);
+                            ResetStream("Writing an answer from the retrieved policy sections…");
+                            Phase = "Writing the answer";
+                            break;
+                        case StreamEventTypes.Delta when e.Text is { } t:
+                            AppendStream(t);
+                            break;
+                    }
+                });
+                IsStreaming = false;
+                Response = r;
+                Answer = Render(r.Answer);
+                Trace = r.Trace;
+                SetWarnings(r.Warnings);
+            }
+            finally
+            {
+                IsStreaming = false;
+                Phase = null;
+            }
         }), () => !string.IsNullOrWhiteSpace(Question) && !IsBusy);
         OpenRecordCommand = new RelayCommand(c => { if (c is IncidentHit h) _ = Main.OpenRecordAsync(h.CaseNumber); });
     }
@@ -181,7 +275,10 @@ public sealed class PolicyViewModel : AiPageViewModel
     public PolicyResponse? Response { get => _response; private set { Set(ref _response, value); OnPropertyChanged(nameof(HasResponse)); OnPropertyChanged(nameof(Summary)); } }
     public bool HasResponse => _response is not null;
     public string Summary => _response is null ? "" :
-        $"{_response.Sections.Count} sections retrieved · {_response.Citations.Count(c => c.Verified)} verified citations{(_response.Citations.Any(c => !c.Verified) ? " · UNVERIFIED citations present" : "")} · audit #{_response.AuditId}";
+        $"{_response.Sections.Count} sections retrieved · " + (IsStreaming ? "writing answer…" :
+        $"{_response.Citations.Count(c => c.Verified)} verified citations{(_response.Citations.Any(c => !c.Verified) ? " · UNVERIFIED citations present" : "")} · audit #{_response.AuditId}");
+
+    protected override void OnStreamingChanged() => OnPropertyChanged(nameof(Summary));
 }
 
 public sealed class LinkExplorerViewModel : ObservableObject

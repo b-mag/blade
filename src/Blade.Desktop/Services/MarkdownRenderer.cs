@@ -19,7 +19,9 @@ public static partial class MarkdownRenderer
     [GeneratedRegex(@"^(?<indent>\s*)(?:[-*•]|\d+\.)\s+(?<text>.*)$")] private static partial Regex BulletRx();
     [GeneratedRegex(@"^#{1,4}\s+(?<text>.*)$")] private static partial Regex HeadingRx();
 
-    public static FlowDocument Render(string markdown, Brush foreground, Brush accent, Brush danger)
+    /// <param name="interactive">False while an answer is still streaming: identifiers are highlighted but not yet clickable,
+    /// because the citation guard has not checked them.</param>
+    public static FlowDocument Render(string markdown, Brush foreground, Brush accent, Brush danger, bool interactive = true)
     {
         var doc = new FlowDocument
         {
@@ -44,7 +46,7 @@ public static partial class MarkdownRenderer
                     doc.Blocks.Add(list);
                 }
                 var p = new Paragraph { Margin = new Thickness(0, 1, 0, 3) };
-                AddInlines(p.Inlines, b.Groups["text"].Value, accent, danger);
+                AddInlines(p.Inlines, b.Groups["text"].Value, accent, danger, interactive);
                 list.ListItems.Add(new ListItem(p));
                 continue;
             }
@@ -53,18 +55,18 @@ public static partial class MarkdownRenderer
             if (HeadingRx().Match(line) is { Success: true } h)
             {
                 var hp = new Paragraph { FontWeight = FontWeights.SemiBold, FontSize = 15, Margin = new Thickness(0, 8, 0, 4) };
-                AddInlines(hp.Inlines, h.Groups["text"].Value, accent, danger);
+                AddInlines(hp.Inlines, h.Groups["text"].Value, accent, danger, interactive);
                 doc.Blocks.Add(hp);
                 continue;
             }
             var para = new Paragraph { Margin = new Thickness(0, line.TrimStart().StartsWith("**") ? 8 : 0, 0, 6) };
-            AddInlines(para.Inlines, line.Trim(), accent, danger);
+            AddInlines(para.Inlines, line.Trim(), accent, danger, interactive);
             doc.Blocks.Add(para);
         }
         return doc;
     }
 
-    private static void AddInlines(InlineCollection target, string text, Brush accent, Brush danger)
+    private static void AddInlines(InlineCollection target, string text, Brush accent, Brush danger, bool interactive)
     {
         var pos = 0;
         foreach (Match m in InlineRx().Matches(text))
@@ -73,21 +75,21 @@ public static partial class MarkdownRenderer
             if (m.Groups["b"].Success)
             {
                 var bold = new Bold();
-                AddInlines(bold.Inlines, m.Groups["b"].Value, accent, danger);
+                AddInlines(bold.Inlines, m.Groups["b"].Value, accent, danger, interactive);
                 target.Add(bold);
             }
             else if (m.Groups["i"].Success)
             {
                 var it = new Italic();
-                AddInlines(it.Inlines, m.Groups["i"].Value, accent, danger);
+                AddInlines(it.Inlines, m.Groups["i"].Value, accent, danger, interactive);
                 target.Add(it);
             }
             else if (m.Groups["c"].Success)
                 target.Add(new Run(m.Groups["c"].Value) { FontFamily = new FontFamily("Consolas") });
             else if (m.Groups["pol"].Success)
-                target.Add(Link("POLICY", m.Groups["pol"].Value, $"Policy {m.Groups["pol"].Value}", m.Groups["pu"].Success, accent, danger));
+                target.Add(Link("POLICY", m.Groups["pol"].Value, $"Policy {m.Groups["pol"].Value}", m.Groups["pu"].Success, accent, danger, interactive));
             else if (m.Groups["id"].Success)
-                target.Add(Link(KindOf(m.Groups["id"].Value), m.Groups["id"].Value, m.Groups["id"].Value, m.Groups["u"].Success, accent, danger));
+                target.Add(Link(KindOf(m.Groups["id"].Value), m.Groups["id"].Value, m.Groups["id"].Value, m.Groups["u"].Success, accent, danger, interactive));
             pos = m.Index + m.Length;
         }
         if (pos < text.Length) target.Add(new Run(text[pos..]));
@@ -96,8 +98,10 @@ public static partial class MarkdownRenderer
     private static string KindOf(string id) =>
         id.StartsWith("FI-") ? "FIELD_INTERVIEW" : id.StartsWith('B') ? "BOOKING" : id.StartsWith("PT-") || id.StartsWith("SC-") ? "PAWN" : "CASE";
 
-    private static Inline Link(string kind, string id, string text, bool unverified, Brush accent, Brush danger)
+    private static Inline Link(string kind, string id, string text, bool unverified, Brush accent, Brush danger, bool interactive)
     {
+        if (!interactive)
+            return new Run(text) { Foreground = accent, FontWeight = FontWeights.SemiBold, ToolTip = "Citation checks run when the answer is complete" };
         if (unverified)
             return new Run($"{text} ⚠ unverified") { Foreground = danger, FontWeight = FontWeights.SemiBold, ToolTip = "The model cited an identifier it was not given. Treat as unreliable." };
         var link = new Hyperlink(new Run(text)) { Foreground = accent, TextDecorations = null, Cursor = System.Windows.Input.Cursors.Hand, FontWeight = FontWeights.SemiBold };

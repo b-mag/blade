@@ -149,3 +149,19 @@ public static class BladeHeaders
     public const string Role = "X-Blade-Role";
     public const string Workstation = "X-Blade-Workstation";
 }
+
+/// <summary>
+/// One line of a streamed answer (newline-delimited JSON). Order: <c>context</c> (everything except the answer text),
+/// then <c>delta</c> chunks, an optional <c>reset</c> if the server regenerates the answer, and finally <c>done</c>
+/// with the complete, guard-checked response, or <c>error</c>.
+/// </summary>
+public sealed record StreamEvent<T>(string Type, string? Text = null, T? Response = null, string? Error = null) where T : class;
+
+public static class StreamEventTypes
+{
+    public const string Context = "context";
+    public const string Delta = "delta";
+    public const string Reset = "reset";
+    public const string Done = "done";
+    public const string Error = "error";
+}

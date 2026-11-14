@@ -29,7 +29,7 @@ public sealed class PolicyService(BladeData data, ILlmClient llm, QueryEmbedder 
         Keep it under 280 words.
         """;
 
-    public async Task<PolicyOutcome> AskAsync(PolicyRequest req, string role, CancellationToken ct = default)
+    public async Task<PolicyOutcome> AskAsync(PolicyRequest req, string role, CancellationToken ct = default, Func<StreamEvent<PolicyResponse>, Task>? emit = null)
     {
         var stages = new List<TraceStage>();
         var warnings = new List<string>();
@@ -70,8 +70,32 @@ public sealed class PolicyService(BladeData data, ILlmClient llm, QueryEmbedder 
                 prompt.AppendLine($"[{i.CaseNumber}] {i.OccurredFrom:yyyy-MM-dd} {i.OffenseDescription}: {NarrativeText.Truncate(NarrativeText.Content(i.Narrative), 420)}");
         }
 
+        var sections = top.Select(t => new PolicySectionHit(t.Section.SectionNumber, t.Section.PolicyNumber, t.Section.PolicyTitle, t.Section.Heading, t.Section.Text, Math.Round(t.Score / max, 3))).ToList();
+        var relatedHits = related.Select(r => new IncidentHit(r.Incident.CaseNumber, r.Incident.OffenseType, r.Incident.OffenseDescription, r.Incident.District,
+            r.Incident.PremiseType, data.LocationOf(r.Incident).Display, r.Incident.OccurredFrom, r.Incident.ReportedAt, string.Join(", ", r.Incident.MoTags),
+            r.Incident.Status, r.Incident.Sensitivity, Math.Round(r.Score, 3), NarrativeText.Truncate(NarrativeText.Content(r.Incident.Narrative), 240), false, null)).ToList();
+        if (emit is not null)
+            await emit(new StreamEvent<PolicyResponse>(StreamEventTypes.Context, Response: new PolicyResponse
+            {
+                Sections = sections, RelatedCases = relatedHits, Warnings = [.. warnings],
+                Trace = new AiTrace { Provider = llm.Provider, Model = llm.Model, Local = llm.IsLocal, Stages = [.. stages] },
+            }));
+
         sw.Restart();
-        var ans = await llm.CompleteAsync(new LlmRequest(SystemPrompt, prompt.ToString(), Temperature: 0.1, MaxTokens: 650), ct);
+        var request = new LlmRequest(SystemPrompt, prompt.ToString(), Temperature: 0.1, MaxTokens: 650);
+        LlmResult ans;
+        if (emit is null) ans = await llm.CompleteAsync(request, ct);
+        else
+        {
+            var safe = new StreamingRedactor();
+            ans = await llm.StreamAsync(request, async chunk =>
+            {
+                var delta = safe.Push(chunk);
+                if (delta.Length > 0) await emit(new StreamEvent<PolicyResponse>(StreamEventTypes.Delta, Text: delta));
+            }, ct);
+            var rest = safe.Flush();
+            if (rest.Length > 0) await emit(new StreamEvent<PolicyResponse>(StreamEventTypes.Delta, Text: rest));
+        }
         stages.Add(new TraceStage("Compose answer (LLM, grounded)", sw.ElapsedMilliseconds, $"{ans.PromptTokens} prompt / {ans.CompletionTokens} output tokens"));
 
         sw.Restart();
@@ -84,10 +108,8 @@ public sealed class PolicyService(BladeData data, ILlmClient llm, QueryEmbedder 
         var response = new PolicyResponse
         {
             Answer = text + "\n\n*Policy reference only — not legal advice. Confirm with your supervisor and the current official manual.*",
-            Sections = top.Select(t => new PolicySectionHit(t.Section.SectionNumber, t.Section.PolicyNumber, t.Section.PolicyTitle, t.Section.Heading, t.Section.Text, Math.Round(t.Score / max, 3))).ToList(),
-            RelatedCases = related.Select(r => new IncidentHit(r.Incident.CaseNumber, r.Incident.OffenseType, r.Incident.OffenseDescription, r.Incident.District,
-                r.Incident.PremiseType, data.LocationOf(r.Incident).Display, r.Incident.OccurredFrom, r.Incident.ReportedAt, string.Join(", ", r.Incident.MoTags),
-                r.Incident.Status, r.Incident.Sensitivity, Math.Round(r.Score, 3), NarrativeText.Truncate(NarrativeText.Content(r.Incident.Narrative), 240), false, null)).ToList(),
+            Sections = sections,
+            RelatedCases = relatedHits,
             Citations = guard.Citations,
             Warnings = warnings,
             Trace = new AiTrace

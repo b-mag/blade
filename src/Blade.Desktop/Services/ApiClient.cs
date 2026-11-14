@@ -1,3 +1,4 @@
+using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
@@ -47,25 +48,52 @@ public sealed class ApiClient
     private async Task<T> Send<T>(HttpRequestMessage req, CancellationToken ct = default)
     {
         using var resp = await _http.SendAsync(req, ct);
-        if (!resp.IsSuccessStatusCode)
-        {
-            var text = await resp.Content.ReadAsStringAsync(ct);
-            string message;
-            try
-            {
-                var doc = JsonDocument.Parse(text).RootElement;
-                message = doc.TryGetProperty("error", out var e) ? e.GetString()!
-                        : doc.TryGetProperty("detail", out var d) ? d.GetString()!
-                        : text;
-            }
-            catch (JsonException) { message = text; }
-            throw new ApiException(resp.StatusCode, string.IsNullOrWhiteSpace(message) ? resp.ReasonPhrase ?? "Request failed" : message);
-        }
+        await EnsureOk(resp, ct);
         return (await resp.Content.ReadFromJsonAsync<T>(Json, ct))!;
+    }
+
+    private static async Task EnsureOk(HttpResponseMessage resp, CancellationToken ct)
+    {
+        if (resp.IsSuccessStatusCode) return;
+        var text = await resp.Content.ReadAsStringAsync(ct);
+        string message;
+        try
+        {
+            var doc = JsonDocument.Parse(text).RootElement;
+            message = doc.TryGetProperty("error", out var e) ? e.GetString()!
+                    : doc.TryGetProperty("detail", out var d) ? d.GetString()!
+                    : text;
+        }
+        catch (JsonException) { message = text; }
+        throw new ApiException(resp.StatusCode, string.IsNullOrWhiteSpace(message) ? resp.ReasonPhrase ?? "Request failed" : message);
+    }
+
+    /// <summary>
+    /// Reads a newline-delimited JSON stream of <see cref="StreamEvent{T}"/>. <paramref name="onEvent"/> runs on the
+    /// caller's context (the UI thread) for every event; the method returns the final response from the done event.
+    /// </summary>
+    private async Task<T> Stream<T>(HttpRequestMessage req, Action<StreamEvent<T>> onEvent, CancellationToken ct) where T : class
+    {
+        using var resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+        await EnsureOk(resp, ct);
+        using var reader = new StreamReader(await resp.Content.ReadAsStreamAsync(ct));
+        while (await reader.ReadLineAsync(ct) is { } line)
+        {
+            if (line.Length == 0) continue;
+            var e = JsonSerializer.Deserialize<StreamEvent<T>>(line, Json)!;
+            if (e.Type == StreamEventTypes.Error) throw new ApiException(HttpStatusCode.InternalServerError, e.Error ?? "AI service error");
+            onEvent(e);
+            if (e.Type == StreamEventTypes.Done && e.Response is not null) return e.Response;
+        }
+        throw new ApiException(HttpStatusCode.InternalServerError, "The server ended the answer stream early.");
     }
 
     public Task<SystemInfo> SystemAsync(CancellationToken ct = default) => Send<SystemInfo>(Req(HttpMethod.Get, "/api/system"), ct);
     public Task<AskResponse> AskAsync(AskRequest r, CancellationToken ct = default) => Send<AskResponse>(Req(HttpMethod.Post, "/api/ask", r), ct);
+    public Task<AskResponse> AskStreamAsync(AskRequest r, Action<StreamEvent<AskResponse>> onEvent, CancellationToken ct = default) =>
+        Stream(Req(HttpMethod.Post, "/api/ask/stream", r), onEvent, ct);
+    public Task<PolicyResponse> PolicyStreamAsync(PolicyRequest r, Action<StreamEvent<PolicyResponse>> onEvent, CancellationToken ct = default) =>
+        Stream(Req(HttpMethod.Post, "/api/policy/stream", r), onEvent, ct);
     public Task<PolicyResponse> PolicyAsync(PolicyRequest r, CancellationToken ct = default) => Send<PolicyResponse>(Req(HttpMethod.Post, "/api/policy", r), ct);
     public Task<IncidentDetail> IncidentAsync(string caseNumber) => Send<IncidentDetail>(Req(HttpMethod.Get, $"/api/incidents/{Uri.EscapeDataString(caseNumber)}"));
     public Task<PolicySectionHit> PolicySectionAsync(string section) => Send<PolicySectionHit>(Req(HttpMethod.Get, $"/api/policy/sections/{Uri.EscapeDataString(section)}"));

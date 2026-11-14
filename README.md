@@ -8,7 +8,7 @@ Proof of concept: a local-AI investigative and policy assistant for a sheriff's 
 | `src/Blade.Server` | ASP.NET Core API on http://localhost:5179. Handles role filtering, hybrid retrieval, the entity graph, grounded LLM answers, the citation guard and the hash-chained audit log |
 | `src/Blade.Desktop` | WPF client: Security & Governance, Architecture, Ask BLADE, Policy Assistant, Link Explorer, Audit Log, and 10 opportunity pages |
 | `src/Blade.Core` | Shared contracts and vocabulary |
-| `tests/Blade.Tests` | 35 tests covering data integrity, planner, guards, audit tamper detection, RBAC and graph links |
+| `tests/Blade.Tests` | 42 tests covering data integrity, planner, guards, audit tamper detection, RBAC, graph links and streaming/PII safety |
 
 ## Prerequisites
 - .NET 10 SDK

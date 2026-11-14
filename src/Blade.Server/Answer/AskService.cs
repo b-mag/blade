@@ -40,7 +40,10 @@ public sealed class AskService(BladeData data, ILlmClient llm, QueryEmbedder emb
     private const string CitationReminder =
         "Write the answer now. EVERY bullet and sentence that states a fact MUST end with one or more record identifiers in square brackets, e.g. [25-002136] or [FI-26-00123]. Use only identifiers that appear above.";
 
-    public async Task<AskOutcome> AskAsync(AskRequest req, string role, CancellationToken ct = default)
+    /// <param name="emit">When set, the answer is streamed: a <c>context</c> event as soon as retrieval, links and series
+    /// are ready, then <c>delta</c> chunks of PII-redacted answer text, and <c>reset</c> if the answer is regenerated.
+    /// The caller sends the final <c>done</c> event (it adds the audit id).</param>
+    public async Task<AskOutcome> AskAsync(AskRequest req, string role, CancellationToken ct = default, Func<StreamEvent<AskResponse>, Task>? emit = null)
     {
         var stages = new List<TraceStage>();
         var warnings = new List<string>();
@@ -96,6 +99,22 @@ public sealed class AskService(BladeData data, ILlmClient llm, QueryEmbedder emb
         var allowedIds = context.Select(c => c.Incident.CaseNumber).Concat(analysis.CitableIds).ToHashSet();
         var userPrompt = BuildPrompt(req.Question, filter, outcome, context, series, analysis);
 
+        // Everything except the answer text is ready now; a streaming client can show it while the model writes.
+        var partial = new AskResponse
+        {
+            Filter = filter,
+            Chips = QueryPlanner.Chips(filter),
+            TotalMatches = outcome.TotalVisible,
+            Withheld = outcome.Withheld,
+            Results = outcome.Matches.Select(m => ToHit(m, series)).ToList(),
+            Series = series,
+            Graph = analysis.Findings.Count > 0 ? graphs.ForFindings(analysis.Findings, seriesCases, role) : null,
+            Links = analysis.Findings,
+            Warnings = [.. warnings],
+            Trace = new AiTrace { Provider = llm.Provider, Model = llm.Model, Local = llm.IsLocal, Stages = [.. stages] },
+        };
+        if (emit is not null) await emit(new StreamEvent<AskResponse>(StreamEventTypes.Context, Response: partial));
+
         sw.Restart();
         string answer;
         LlmResult? ans = null;
@@ -106,7 +125,7 @@ public sealed class AskService(BladeData data, ILlmClient llm, QueryEmbedder emb
         }
         else
         {
-            ans = await llm.CompleteAsync(new LlmRequest(AnswerSystemPrompt, userPrompt, Temperature: 0.1, MaxTokens: 1000), ct);
+            ans = await Generate(new LlmRequest(AnswerSystemPrompt, userPrompt, Temperature: 0.1, MaxTokens: 1000), emit, ct);
             answer = ans.Text;
             stages.Add(new TraceStage("Compose answer (LLM, grounded)", sw.ElapsedMilliseconds, $"{ans.PromptTokens} prompt / {ans.CompletionTokens} output tokens"));
 
@@ -114,9 +133,10 @@ public sealed class AskService(BladeData data, ILlmClient llm, QueryEmbedder emb
             if (CitationGuard.Check(answer, allowedIds).Citations.Count(c => c.Verified) < 2)
             {
                 sw.Restart();
-                var retry = await llm.CompleteAsync(new LlmRequest(AnswerSystemPrompt,
+                if (emit is not null) await emit(new StreamEvent<AskResponse>(StreamEventTypes.Reset, Text: "The first draft lacked citations; regenerating."));
+                var retry = await Generate(new LlmRequest(AnswerSystemPrompt,
                     userPrompt + "\n\nYOUR PREVIOUS DRAFT WAS REJECTED because it did not cite record identifiers. Rewrite it so every factual bullet ends with [case number] citations.",
-                    Temperature: 0.1, MaxTokens: 1000), ct);
+                    Temperature: 0.1, MaxTokens: 1000), emit, ct);
                 stages.Add(new TraceStage("Re-generate (citation check failed)", sw.ElapsedMilliseconds, $"{retry.PromptTokens} prompt / {retry.CompletionTokens} output tokens"));
                 warnings.Add("First draft lacked citations and was regenerated automatically.");
                 ans = retry with { PromptTokens = ans.PromptTokens + retry.PromptTokens, CompletionTokens = ans.CompletionTokens + retry.CompletionTokens };
@@ -131,17 +151,9 @@ public sealed class AskService(BladeData data, ILlmClient llm, QueryEmbedder emb
         stages.Add(new TraceStage("Citation guard + PII filter", sw.ElapsedMilliseconds, $"{guard.Citations.Count} citations, {guard.Unverified.Count} unverified, {redactions} redactions"));
         if (guard.Unverified.Count > 0) warnings.Add($"The model cited {guard.Unverified.Count} identifier(s) it was not given; they are flagged ⚠UNVERIFIED.");
 
-        var response = new AskResponse
+        var response = partial with
         {
             Answer = redacted,
-            Filter = filter,
-            Chips = QueryPlanner.Chips(filter),
-            TotalMatches = outcome.TotalVisible,
-            Withheld = outcome.Withheld,
-            Results = outcome.Matches.Select(m => ToHit(m, series)).ToList(),
-            Series = series,
-            Graph = analysis.Findings.Count > 0 ? graphs.ForFindings(analysis.Findings, seriesCases, role) : null,
-            Links = analysis.Findings,
             Citations = guard.Citations,
             Warnings = warnings,
             Trace = new AiTrace
@@ -170,6 +182,21 @@ public sealed class AskService(BladeData data, ILlmClient llm, QueryEmbedder emb
             },
         };
         return new AskOutcome(response, req.Question, plan.Llm, ans);
+    }
+
+    /// <summary>Runs the answer model, streaming redacted whole-word chunks to <paramref name="emit"/> when it is set.</summary>
+    private async Task<LlmResult> Generate(LlmRequest request, Func<StreamEvent<AskResponse>, Task>? emit, CancellationToken ct)
+    {
+        if (emit is null) return await llm.CompleteAsync(request, ct);
+        var safe = new StreamingRedactor();
+        var result = await llm.StreamAsync(request, async chunk =>
+        {
+            var delta = safe.Push(chunk);
+            if (delta.Length > 0) await emit(new StreamEvent<AskResponse>(StreamEventTypes.Delta, Text: delta));
+        }, ct);
+        var rest = safe.Flush();
+        if (rest.Length > 0) await emit(new StreamEvent<AskResponse>(StreamEventTypes.Delta, Text: rest));
+        return result;
     }
 
     private string BuildPrompt(string question, SearchFilter f, SearchOutcome outcome, List<ScoredIncident> context, SeriesFinding? series, LinkAnalysis analysis)

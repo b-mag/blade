@@ -39,7 +39,7 @@ Three things the audience should leave with:
    ```
 
 ### 10 minutes before
-Models unload after 60 idle minutes. A cold first question takes about 50 s instead of about 22 s.
+Models unload after 60 idle minutes. On a cold first question, the results take about 25 s to appear instead of about 5 s.
 1. Warm the models:
    ```powershell
    Invoke-RestMethod -Method Post http://localhost:5179/api/admin/warmup
@@ -107,12 +107,16 @@ If you have a 30-minute slot, spend the extra time on Under the Hood, the option
 ### 4. Ask BLADE: the burglary series (5:00 – 10:00)
 **CLICK:** Ask BLADE. Click the first sample: *Show similar burglaries in the north district last 18 months involving forced entry on commercial buildings after 10pm*. Click **Ask**.
 
-**While it runs (about 22 s), SAY:**
-- "This is the question an investigator actually asks. It's a pattern question across the RMS, plus whatever else we know."
-- "Behind the scenes it's pulling from six systems: RMS incidents, CAD, field interviews, license plate readers, jail bookings and pawn records."
-- "It's about 20 seconds on a laptop GPU, and most of that is writing the answer. Server hardware or streaming makes it feel much faster."
+**What happens:** after about 5 s the filter chips, results grid, series card and connections appear. The answer starts typing at about 8 s and finishes at about 22 s. Case numbers in the answer become clickable links once it finishes.
 
-**When the answer lands, walk through it top to bottom:**
+**While the first 5 s run, SAY:**
+- "This is the question an investigator actually asks. It's a pattern question across the RMS, plus whatever else we know."
+
+**While the answer types, SAY:**
+- "Notice the results, the series and the connections are already on screen. Those are computed by code from six systems: RMS incidents, CAD, field interviews, license plate readers, jail bookings and pawn records. The AI is now writing a summary of what code already found."
+- "The case numbers turn into links when it finishes. That's when the citation check has run, so nothing is clickable before it's been verified."
+
+**When the answer finishes, walk through it top to bottom:**
 1. **Filter chips.** "First, this is how the AI interpreted the question: burglary, North district, commercial, forced entry, the last 18 months, 22:00 to 06:00. You can check it, and if it's wrong, you fix the filter and click **Re-run with my filter**, which skips the AI planner."
 2. **Answer.** "Every claim is cited." Click a case number, for example **26-001925**, to open the full report. Close it.
 3. **Possible series card.** "It found 7 incidents from August 2025 to September 2026. Four are tied together by shared entities. Three were added because they match the M.O. and read alike." Then: "Note the wording: *Requires analyst confirmation.* It's a lead, not a conclusion."
@@ -143,7 +147,7 @@ If you have a 30-minute slot, spend the extra time on Under the Hood, the option
 **SAY:** "Victims and reporting parties are deliberately excluded from link analysis, so the system doesn't connect a burglary victim to a suspect just because they share an address."
 
 ### 6. Policy Assistant (12:00 – 14:30)
-**CLICK:** Policy Assistant. Click the first sample: *What does policy say about use of force with a knife threat when the subject is non-compliant?* Click **Ask policy**. It takes about 7 s.
+**CLICK:** Policy Assistant. Click the first sample: *What does policy say about use of force with a knife threat when the subject is non-compliant?* Click **Ask policy**. The sections list appears at once, the answer starts within about 2 s and finishes in about 7 s.
 
 **SAY:**
 - "A deputy or supervisor asks in plain English. The answer cites the exact sections: 300.3.6 on edged weapons, 300.4.1 on deadly force criteria, and 300.3.4."
@@ -160,7 +164,7 @@ If you have a 30-minute slot, spend the extra time on Under the Hood, the option
 ### 7. Roles, withholding and audit (14:30 – 17:30)
 **CLICK:** Switch the role to **DEPUTY** (user `dep.harmon`). Go to **Ask BLADE** and type:
 *Vandalism and shoplifting incidents in the last 12 months*
-Click **Ask**. It takes about 15 s.
+Click **Ask**. The count appears in about 2.5 s; you don't need to wait for the answer to finish. If the summary line shows an **UNVERIFIED** citation, that's the guard working: say so and move on.
 
 **SAY:**
 - "Same system, logged in as a deputy. The summary line reads **220 matching incidents · 10 withheld for your role**. Those involve juveniles, and a deputy's role can't see them."
@@ -200,7 +204,7 @@ Mention the rest in one breath: body-cam transcription, a report quality checker
 
 ### 9. Close (19:30 – 20:00)
 **SAY:**
-- "So, to recap. **Value**: it connected a van, a pawn seller and a co-arrestee across six systems in about 20 seconds. **Trust**: local, role-filtered, cited, audited and tamper-evident. **ROI**: a ranked list with formulas you can fill in."
+- "So, to recap. **Value**: it connected a van, a pawn seller and a co-arrestee across six systems in about 5 seconds. **Trust**: local, role-filtered, cited, audited and tamper-evident. **ROI**: a ranked list with formulas you can fill in."
 - "A sensible next step is to pick one use case, measure a two-to-four-week baseline, then run a small pilot against a read-only replica and measure the same things."
 - Turn Wi-Fi back on after the demo, not before Q&A ends.
 
@@ -230,7 +234,7 @@ Mention the rest in one breath: body-cam transcription, a report quality checker
 | Problem | What to do |
 |---|---|
 | The status bar says the server is offline | Click **Start local server** in the status bar. Wait about 15 s while it warms the models. |
-| The first answer takes about 50 s | The models were cold. Keep talking with the "while it runs" points. Afterwards it's back to about 22 s. |
+| The first results take about 25 s to appear | The models were cold. Keep talking with the "while the first 5 s run" points. The next question is back to normal speed. |
 | Ollama isn't responding | Start Ollama from the Start menu. Then run the warmup command from Pre-flight. |
 | An answer comes back thin or uncited | Click **Ask** again. The server already retries once on its own when citations are missing. If an **unverified** citation appears, use it: "That's the guard catching the model." |
 | The graph looks cluttered | Drag the gold series node to the center, or re-open it with **Open in Link Explorer**. |
@@ -288,9 +292,9 @@ Mention the rest in one breath: body-cam transcription, a report quality checker
 
 **Typical timings (warm, this laptop):**
 
-| Question | Time |
-|---|---|
-| Burglary question | about 22 s |
-| Catalytic question | about 13 s |
-| Policy questions | 6–8 s |
-| Deputy withholding question | about 15 s |
+| Question | Results appear | Answer starts | Answer finishes |
+|---|---|---|---|
+| Burglary question | about 5 s | about 8 s | about 22 s |
+| Catalytic question | about 4 s | about 5 s | 13–21 s |
+| Policy questions | under 1 s | about 2 s | 6–8 s |
+| Deputy withholding question | about 2.5 s | about 3 s | about 13 s |
