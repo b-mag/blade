@@ -2,6 +2,8 @@
 
 Proof of concept: a local-AI investigative and policy assistant for a sheriff's office. It runs against **synthetic data for the fictional Kestrel County Sheriff's Office**. No real CJI is used.
 
+![Uploading Screenshot 2026-11-14 161030.png…]()
+
 | Project | What it is |
 |---|---|
 | `src/Blade.DataGen` | Generates `data/blade.db`: RMS/CAD/FI/LPR/JMS/pawn data with planted investigative storylines, the policy manual, embeddings and FTS indexes |
