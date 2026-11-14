@@ -2,7 +2,8 @@
 
 Proof of concept: a local-AI investigative and policy assistant for a sheriff's office. It runs against **synthetic data for the fictional Kestrel County Sheriff's Office**. No real CJI is used.
 
-![Uploading Screenshot 2026-11-14 161030.png…]()
+<img width="1520" height="802" alt="Screenshot 2026-11-14 161030" src="https://github.com/user-attachments/assets/044138be-d553-4538-b20b-6e1d02ea9b0b" />
+
 
 | Project | What it is |
 |---|---|
