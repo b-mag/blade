@@ -732,5 +732,493 @@
   "roiSummary": {
     "intro": "The ranking weighs time returned to deputies and staff against feasibility, data readiness and risk. The top items reuse the same local model server, audit log and role filters, so each additional use case costs less than the first. All figures here are illustrative formulas; your own volumes and timings will set the real numbers.",
     "notes": "Before any pilot, measure a baseline for two to four weeks (minutes per report, hours per records request, return rates, lookup times), then measure the same metrics during the pilot with the same unit. Count review and correction time honestly, so the result reflects net time saved, not drafting speed alone."
+  },
+  "dataReadiness": {
+    "intro": "Connecting to a database is the easy part. To be useful to AI, each record has to be findable, filterable by clearance, linkable to other systems and citable, and it has to stay that way as records change. Source systems are not modified: the AI reads from replicas, exports or APIs.",
+    "shortAnswer": "Is this a big project? Across every source, yes: plan it as a program over several quarters. But it is done one source at a time, in order of value, and each source is useful as soon as it is ready. A first source plus a pilot use case is typically 8-12 weeks, most of it ordinary data engineering your team already knows.",
+    "steps": [
+      {
+        "number": 1,
+        "title": "Connect (read-only)",
+        "existing": "Read-only replica, scheduled export or vendor API, with a least-privilege service account. Nothing in the source system changes.",
+        "ongoing": "Add change detection: change data capture, last-modified timestamps or a nightly delta export. Deletions and sealing must be detectable too."
+      },
+      {
+        "number": 2,
+        "title": "Map and label fields",
+        "existing": "Document what fields mean. Map vendor codes to one agency vocabulary. Normalize dates, districts, plates and phones. Put a sensitivity label on every record.",
+        "ongoing": "The same mapping runs on every new or changed record. Unknown codes are flagged for review, never guessed."
+      },
+      {
+        "number": 3,
+        "title": "Prepare the text",
+        "existing": "Extract text from rich text, HTML or PDF (OCR for scans). Strip template boilerplate. Split along the document's own structure: report, supplement, policy section.",
+        "ongoing": "The same pipeline runs per new document, and again when a report is edited or approved."
+      },
+      {
+        "number": 4,
+        "title": "Link entities",
+        "existing": "Match people, vehicles, phones and addresses across systems. Pull plates, phones and serials out of narratives. Build the link table.",
+        "ongoing": "Link each new record as it arrives: a plate read near a fresh burglary, a pawned serial that matches stolen property."
+      },
+      {
+        "number": 5,
+        "title": "Index",
+        "existing": "One-time backfill: embeddings with a pinned model, a keyword index and metadata. Typically hours to a few days for an archive on one GPU server.",
+        "ongoing": "A change worker every minute or so, plus a nightly reconciliation. A full rebuild only when you change the embedding model."
+      },
+      {
+        "number": 6,
+        "title": "Verify",
+        "existing": "Golden questions for the source: does the right record appear in the top 10? Test accounts for each role confirm clearance filtering.",
+        "ongoing": "Nightly count and freshness checks with alerts. Re-run the golden questions after any change to the pipeline or model."
+      }
+    ],
+    "prioritizationIntro": "Order sources by the value of the use case they unlock first, then by how ready they are. Start where one well-understood source answers a question people ask every day. Typical sources for a sheriff's office:",
+    "sources": [
+      {
+        "source": "Policy manual, general orders, training bulletins",
+        "unlocks": "Policy Assistant, training knowledge base",
+        "readiness": "High: documents with numbered sections, no CJI",
+        "wave": "1"
+      },
+      {
+        "source": "RMS incidents and narratives",
+        "unlocks": "Ask BLADE, report assistant, quality checker",
+        "readiness": "Medium: codes to map, narratives to clean, sensitivity labels essential",
+        "wave": "1"
+      },
+      {
+        "source": "CAD calls and remarks",
+        "unlocks": "Repeat-call patterns, dispatch assist",
+        "readiness": "Medium: high volume, terse remarks",
+        "wave": "2"
+      },
+      {
+        "source": "Jail / JMS bookings",
+        "unlocks": "Jail intelligence, co-arrest links",
+        "readiness": "Medium: strict access rules, classification data",
+        "wave": "2"
+      },
+      {
+        "source": "LPR reads",
+        "unlocks": "Vehicle-near-scene links",
+        "readiness": "High structure, very high volume, retention limits",
+        "wave": "2"
+      },
+      {
+        "source": "Field interviews",
+        "unlocks": "Person and vehicle associations",
+        "readiness": "Medium: short free-text notes",
+        "wave": "2"
+      },
+      {
+        "source": "Pawn and scrap records",
+        "unlocks": "Serial matches to stolen property",
+        "readiness": "Often a state or vendor portal; check access terms",
+        "wave": "2-3"
+      },
+      {
+        "source": "Body-cam and interview recordings",
+        "unlocks": "Transcription and search",
+        "readiness": "Low: needs a speech-to-text pipeline and large storage",
+        "wave": "3"
+      },
+      {
+        "source": "Scanned paper and legacy archives",
+        "unlocks": "Cold cases, records requests",
+        "readiness": "Low: OCR and quality review",
+        "wave": "3"
+      }
+    ],
+    "phases": [
+      {
+        "title": "Foundation",
+        "duration": "4-6 weeks, once",
+        "detail": "Read-only access pattern, sensitivity label scheme, change tracking, index store, golden-question harness. Every later source reuses it."
+      },
+      {
+        "title": "Wave 1",
+        "duration": "8-12 weeks",
+        "detail": "Policy manual and RMS, feeding one pilot use case. Measure a baseline before, the same metrics during."
+      },
+      {
+        "title": "Wave 2",
+        "duration": "2-6 weeks per source",
+        "detail": "CAD, JMS, LPR, field interviews, pawn. Each one adds links that make the earlier sources more valuable."
+      },
+      {
+        "title": "Wave 3",
+        "duration": "Separate projects",
+        "detail": "Scanned archives and recordings. Highest effort; schedule them when a use case justifies it."
+      }
+    ],
+    "effort": [
+      {
+        "sourceType": "Modern database with a replica",
+        "time": "1-3 weeks",
+        "mainWork": "Field mapping, sensitivity labels, change tracking",
+        "skills": "DBA, data engineer"
+      },
+      {
+        "sourceType": "Vendor API",
+        "time": "2-4 weeks",
+        "mainWork": "Paging, rate limits, incremental sync, contract terms",
+        "skills": "Integration developer"
+      },
+      {
+        "sourceType": "Legacy database, stored procedures, flat-file exports",
+        "time": "3-8 weeks",
+        "mainWork": "Working out old schemas and codes, scheduled exports",
+        "skills": "DBA with system knowledge, data engineer"
+      },
+      {
+        "sourceType": "Document repository (Word, PDF)",
+        "time": "2-6 weeks",
+        "mainWork": "Text extraction, splitting, versions, permissions",
+        "skills": "Data engineer, records staff"
+      },
+      {
+        "sourceType": "Scanned paper and images",
+        "time": "2-6 months",
+        "mainWork": "OCR, quality review, manual indexing where needed",
+        "skills": "Records staff, OCR tooling"
+      },
+      {
+        "sourceType": "Audio and video",
+        "time": "Separate project",
+        "mainWork": "Speech-to-text, storage, review",
+        "skills": "Evidence/media staff, engineer"
+      }
+    ],
+    "effortNote": "Planning ranges for one source feeding one use case, once access is approved. Validate them in a pilot. The scarcest skill is usually the person who knows what the old fields actually mean.",
+    "readyChecks": [
+      "Golden questions: the right record is in the top 10 for at least 9 in 10 questions.",
+      "Clearance: a test account for each role sees exactly what it should, and is told what was withheld.",
+      "Freshness: a new test record is searchable within the agreed time (for example, 5 minutes).",
+      "Deletion: a sealed test record disappears within the agreed time.",
+      "Counts: source and index record counts match every night.",
+      "Citations: every record number in an answer opens the right record."
+    ],
+    "faq": [
+      {
+        "question": "What does data readiness actually require, beyond dumping tables or files somewhere?",
+        "answer": "Four things for every record: findable (clean text plus indexes), filterable (date, district, type and clearance as fields), linkable (consistent IDs for people, vehicles and places) and citable (a stable record number). A folder of files gives you none of them."
+      },
+      {
+        "question": "Can we use legacy systems without rewriting them?",
+        "answer": "Yes. Read from a replica, a scheduled export, stored-procedure output or the vendor's API. The source system stays as it is; the readiness pipeline does the translation. Old formats are fine as long as the feed runs on a schedule and includes changes."
+      },
+      {
+        "question": "How clean does the data need to be? Can we live with messy records?",
+        "answer": "Text can be messy: search tolerates typos and inconsistent writing. The fields you filter on must be right, because a wrong date, code or sensitivity label silently hides or exposes a record. Fix those first. Incomplete records are still usable; they just carry less."
+      },
+      {
+        "question": "How should we break up documents and records?",
+        "answer": "Follow the source's own structure: one piece per report narrative, supplement or policy section, with long documents split at headings. A record spread across tables (incident, people, vehicles, property) is assembled into one readable record first. Every piece keeps a link to its parent case."
+      },
+      {
+        "question": "What metadata should we add or keep?",
+        "answer": "On every piece: source system, record ID, case number, date, district or unit, record type, sensitivity, status (draft or approved), version and the embedding model used. These drive filtering, clearance checks, citations and freshness checks."
+      },
+      {
+        "question": "How do we keep it current without full reloads?",
+        "answer": "A change worker picks up new, updated and deleted records every minute or so and updates only those. A nightly job reconciles counts and deletions. Full reloads happen only when you change the embedding model."
+      },
+      {
+        "question": "What extra care does sensitive or regulated data need?",
+        "answer": "Label sensitivity on every record and filter on it before the search, so the model never sees what the user cannot. Sealing, expungement and retention must reach the index as fast as the source. Treat the index and the prompts as CJI: same hosting, encryption, access control and audit."
+      },
+      {
+        "question": "One common schema, or keep each source as it is?",
+        "answer": "Both, lightly. Keep each source's detail as it is, and add a thin common layer: shared IDs (person, vehicle, location), shared filter fields (date, district, type, sensitivity) and one text field. Don't build a full enterprise data model first."
+      },
+      {
+        "question": "What effort and skills does each kind of source need?",
+        "answer": "See the effort table. Modern databases and APIs are mostly configuration. Legacy systems are mostly detective work, so the key person is whoever knows what the old fields and codes mean."
+      },
+      {
+        "question": "How will we know it's ready enough?",
+        "answer": "When the ready-enough checks pass. Signs of trouble: the right record isn't found (missing text or metadata), answers lack context (pieces too small or cut off from their case), irrelevant matches (boilerplate, pieces too big), and old or deleted records appearing (change tracking is broken)."
+      },
+      {
+        "question": "Does the model learn from or train on our data?",
+        "answer": "No. The model doesn't change. Records are looked up for each question and forgotten after the answer. Remove a record from the index and the AI can no longer use it."
+      },
+      {
+        "question": "Do we need a separate vector database product?",
+        "answer": "No new product is required. Vectors can live in a database you already run, such as PostgreSQL with pgvector or recent SQL Server and Oracle versions. They are an index pointing to your records, not a second copy of them."
+      },
+      {
+        "question": "Do the embeddings change when we change AI models?",
+        "answer": "Only when you change the embedding model. BLADE uses two models: a chat model that writes answers (qwen3:8b) and an embedding model that turns text into vectors (nomic-embed-text). Swap the chat model any time with no re-indexing. A different embedding model produces incompatible vectors, so changing it means re-embedding everything as a planned rebuild."
+      },
+      {
+        "question": "Should we test several models before choosing?",
+        "answer": "Yes. Test two or three of each kind, separately, on your own golden questions. For embedding models, embed a sample of a few thousand records with each and compare how often the right record lands in the top 10. For chat models, compare citation accuracy, correct filters and speed on your hardware."
+      },
+      {
+        "question": "Does any of this send data to the cloud?",
+        "answer": "Not in this design. Extraction, embedding, indexing and the models all run on agency hardware, on a segmented network."
+      },
+      {
+        "question": "Do vendor contracts matter?",
+        "answer": "Check them early. Some RMS and JMS contracts limit bulk export, API use or derived databases. Involve procurement and the vendor before the first sprint."
+      },
+      {
+        "question": "What hardware does indexing need?",
+        "answer": "The same GPU server that runs the model. Run the historical backfill overnight or over a weekend; after that, the daily load of new records is small."
+      }
+    ],
+    "sqlServer": {
+      "intro": "Example: an RMS and a jail system on SQL Server. Retrieval data lives in side tables in its own database, keyed back to the source rows. The legacy tables are not changed.",
+      "principles": [
+        "Leave vendor tables untouched: upgrades and support contracts often forbid schema changes. SQL Server Change Tracking or Change Data Capture detect changes without adding columns.",
+        "Put the retrieval tables in their own database (for example BladeRetrieval) on the replica's instance. It gets its own permissions, backups and retention, and cross-database joins still work.",
+        "Only tables with meaningful free text need retrieval text and vectors. Mostly-structured tables, such as bookings and LPR reads, are filtered with plain SQL and contribute links.",
+        "Use one shared Chunk table for all sources, filtered by its sensitivity column, so every search applies the same clearance rule. Split it out only for data with very different access or retention rules.",
+        "Store the embedding model's name with every vector. Changing the embedding model means re-embedding: build the new vectors alongside the old ones, then switch searches over.",
+        "retrieval_text is a cleaned copy of CJI. It follows the same sealing, expungement and retention rules as the source, enforced by is_deleted and the nightly reconciliation."
+      ],
+      "ddl": "-- One row per source record: the assembled, cleaned, readable version\nCREATE TABLE retrieval.Document (\n    doc_id             bigint IDENTITY PRIMARY KEY,\n    source_system      varchar(20)   NOT NULL,   -- 'RMS', 'JMS', 'POLICY'\n    source_table       sysname       NOT NULL,   -- 'dbo.Incident'\n    source_pk          nvarchar(64)  NOT NULL,   -- key back to the legacy row\n    record_number      nvarchar(32)  NOT NULL,   -- e.g. '25-002136'\n    record_type        varchar(30)   NOT NULL,\n    occurred_at        datetime2     NULL,       -- common filter fields\n    district           varchar(10)   NULL,\n    sensitivity        varchar(12)   NOT NULL,   -- NORMAL / JUVENILE / RESTRICTED\n    status             varchar(12)   NOT NULL,   -- DRAFT / APPROVED\n    retrieval_text     nvarchar(max) NOT NULL,   -- assembled, boilerplate stripped\n    content_hash       binary(32)    NOT NULL,   -- unchanged text = no re-embed\n    source_modified_at datetime2     NOT NULL,\n    indexed_at         datetime2     NOT NULL,\n    is_deleted         bit           NOT NULL DEFAULT 0,  -- sealed/expunged\n    CONSTRAINT UQ_Document_Source UNIQUE (source_system, source_table, source_pk)\n);\n\n-- One row per searchable piece (short record = 1, long policy = many)\nCREATE TABLE retrieval.Chunk (\n    chunk_id     bigint IDENTITY PRIMARY KEY,\n    doc_id       bigint NOT NULL REFERENCES retrieval.Document(doc_id),\n    chunk_no     int    NOT NULL,\n    chunk_text   nvarchar(max) NOT NULL,     -- full-text indexed\n    embedding    vector(768)   NOT NULL,     -- SQL Server 2025 type\n    embed_model  varchar(50)   NOT NULL      -- never mix models\n);",
+      "options": [
+        {
+          "aspect": "Searching across sources",
+          "shared": "One query covers everything",
+          "perSource": "Search each table, then merge the results"
+        },
+        {
+          "aspect": "Clearance filtering",
+          "shared": "One rule on sensitivity, applied everywhere",
+          "perSource": "Repeated per table, which risks gaps"
+        },
+        {
+          "aspect": "Change pipeline",
+          "shared": "One worker, one pattern",
+          "perSource": "One per source"
+        },
+        {
+          "aspect": "Source-specific fields",
+          "shared": "Common columns plus a JSON column for extras",
+          "perSource": "Natural"
+        },
+        {
+          "aspect": "When to choose",
+          "shared": "The default",
+          "perSource": "Data needing physical separation, such as medical or informant records"
+        }
+      ],
+      "versionNote": "SQL Server 2025 and Azure SQL add a native vector type and VECTOR_DISTANCE, so similarity search can run inside the database; confirm vector-index support for your exact version. On older versions, store vectors as varbinary and search them in the application or a separate vector index. BLADE searches in memory, which suits up to a few million chunks on one server."
+    },
+    "embeddingModels": {
+      "intro": "The embedding model is the one AI choice that is hard to change later: switching it means re-embedding every record. Choose it at the start, from a short test on your own data. All of these run entirely on agency hardware through Ollama.",
+      "models": [
+        {
+          "name": "bge-m3",
+          "tag": "TOP CANDIDATE FOR POLICE RECORDS",
+          "facts": "BAAI · 568M parameters · ~1.2 GB · 1,024 dimensions · 8,192-token input · MIT license",
+          "why": "A full narrative with its supplements fits in one piece. It handles 100+ languages, so a Spanish statement matches an English question. No prefixes to get wrong, and it is widely deployed and stable.",
+          "ratings": [
+            {
+              "dimension": "Retrieval accuracy",
+              "score": 4,
+              "note": "Strong, especially across languages"
+            },
+            {
+              "dimension": "Data security",
+              "score": 5,
+              "note": "Open MIT-licensed weights"
+            },
+            {
+              "dimension": "Match reliability",
+              "score": 5,
+              "note": "No prefixes; long input avoids silent truncation"
+            },
+            {
+              "dimension": "Scalability",
+              "score": 3,
+              "note": "~4 GB of vectors per million pieces; slower than small models"
+            },
+            {
+              "dimension": "Operational practicality",
+              "score": 4,
+              "note": "Comfortable on a GPU server; slower on CPU"
+            }
+          ]
+        },
+        {
+          "name": "qwen3-embedding",
+          "tag": "HIGHEST ACCURACY, IF HARDWARE ALLOWS",
+          "facts": "Alibaba · 0.6B / 4B / 8B · ~0.6-4.7 GB · 1,024 / 2,560 / 4,096 dimensions (shrinkable) · 32K-token input · Apache 2.0",
+          "why": "The newest family and the top of public multilingual benchmarks (the 8B model ranked first on MTEB multilingual in June 2025). The 0.6B size is the realistic test candidate; 4B and 8B need a server GPU.",
+          "ratings": [
+            {
+              "dimension": "Retrieval accuracy",
+              "score": 5,
+              "note": "Highest published scores"
+            },
+            {
+              "dimension": "Data security",
+              "score": 5,
+              "note": "Open Apache 2.0 weights"
+            },
+            {
+              "dimension": "Match reliability",
+              "score": 4,
+              "note": "Very long input; queries need an instruction prefix"
+            },
+            {
+              "dimension": "Scalability",
+              "score": 2,
+              "note": "Large vectors and slower indexing at 4B and 8B; shrink dimensions to offset"
+            },
+            {
+              "dimension": "Operational practicality",
+              "score": 3,
+              "note": "0.6B is easy; 8B needs a dedicated GPU"
+            }
+          ]
+        },
+        {
+          "name": "nomic-embed-text",
+          "tag": "GOOD BASELINE (USED IN BLADE)",
+          "facts": "Nomic · 137M parameters · ~0.3 GB · 768 dimensions (shrinkable to 64) · 8,192-token input · Apache 2.0",
+          "why": "Small, fast and fully open: weights, code and training data are all published. Runs comfortably on CPU. It is the benchmark every other candidate has to beat.",
+          "ratings": [
+            {
+              "dimension": "Retrieval accuracy",
+              "score": 3,
+              "note": "Solid for its size; English-focused"
+            },
+            {
+              "dimension": "Data security",
+              "score": 5,
+              "note": "Weights, code and training data all open"
+            },
+            {
+              "dimension": "Match reliability",
+              "score": 3,
+              "note": "Requires search_query / search_document prefixes; missing them hurts results"
+            },
+            {
+              "dimension": "Scalability",
+              "score": 5,
+              "note": "~3 GB per million pieces, and vectors can be shrunk"
+            },
+            {
+              "dimension": "Operational practicality",
+              "score": 5,
+              "note": "Tiny, CPU-friendly, mature in Ollama"
+            }
+          ]
+        },
+        {
+          "name": "granite-embedding",
+          "tag": "BEST FOR RESOURCE-CONSTRAINED DEPLOYMENTS",
+          "facts": "IBM · 30M / 278M · ~0.06-0.6 GB · 384 / 768 dimensions · 512-token input · Apache 2.0",
+          "why": "Very small models trained on data IBM documents as license-clean, which is easy to defend in procurement. The 30M English model runs on almost any CPU. Check for IBM's newer replacement before adopting.",
+          "ratings": [
+            {
+              "dimension": "Retrieval accuracy",
+              "score": 2,
+              "note": "Below the larger models"
+            },
+            {
+              "dimension": "Data security",
+              "score": 5,
+              "note": "Apache 2.0 with documented training sources"
+            },
+            {
+              "dimension": "Match reliability",
+              "score": 2,
+              "note": "512-token limit; long reports need careful splitting"
+            },
+            {
+              "dimension": "Scalability",
+              "score": 5,
+              "note": "~1.5 GB per million pieces at 384 dimensions; very fast"
+            },
+            {
+              "dimension": "Operational practicality",
+              "score": 5,
+              "note": "Runs on almost any CPU"
+            }
+          ]
+        },
+        {
+          "name": "embeddinggemma",
+          "tag": "SMALL AND MULTILINGUAL",
+          "facts": "Google · 308M parameters · ~0.6 GB · 768 dimensions (shrinkable to 128) · 2,048-token input · Gemma terms of use",
+          "why": "Google's compact multilingual model, built for limited hardware. Have counsel review the Gemma terms of use before adopting.",
+          "ratings": [
+            {
+              "dimension": "Retrieval accuracy",
+              "score": 3,
+              "note": "Good for its size"
+            },
+            {
+              "dimension": "Data security",
+              "score": 4,
+              "note": "Open weights; custom license terms to review"
+            },
+            {
+              "dimension": "Match reliability",
+              "score": 3,
+              "note": "2K input covers most single reports"
+            },
+            {
+              "dimension": "Scalability",
+              "score": 5,
+              "note": "Small vectors; can shrink to 128 dimensions"
+            },
+            {
+              "dimension": "Operational practicality",
+              "score": 4,
+              "note": "Light; runs on modest hardware"
+            }
+          ]
+        },
+        {
+          "name": "mxbai-embed-large",
+          "tag": "ENGLISH PRECISION ON SHORT TEXT",
+          "facts": "Mixedbread · 335M parameters · ~0.7 GB · 1,024 dimensions · 512-token input · Apache 2.0",
+          "why": "Very accurate on short English text such as CAD remarks and field interview notes. The 512-token limit means long narratives are silently cut off unless they are split first.",
+          "ratings": [
+            {
+              "dimension": "Retrieval accuracy",
+              "score": 4,
+              "note": "Strong English results"
+            },
+            {
+              "dimension": "Data security",
+              "score": 5,
+              "note": "Open Apache 2.0 weights"
+            },
+            {
+              "dimension": "Match reliability",
+              "score": 2,
+              "note": "512-token limit truncates long reports; query prefix needed"
+            },
+            {
+              "dimension": "Scalability",
+              "score": 3,
+              "note": "~4 GB per million pieces"
+            },
+            {
+              "dimension": "Operational practicality",
+              "score": 4,
+              "note": "Mid-size, well supported"
+            }
+          ]
+        }
+      ],
+      "shortlist": "Suggested three-model test: nomic-embed-text (baseline), bge-m3 (police-records candidate) and qwen3-embedding:0.6b (accuracy challenger). Score each on your golden questions, then keep the winner unless a later test shows a gain worth a full rebuild.",
+      "notes": [
+        "Decide once: changing the embedding model means re-embedding every record. Models with shrinkable vectors let you cut storage later without re-embedding.",
+        "Names, plates and case numbers: no embedding model matches identifiers reliably. Keyword search handles those, which is why BLADE uses both.",
+        "Vectors are as sensitive as the text: research shows much of the original text can be reconstructed from embeddings, so protect the vector store like the records themselves.",
+        "Ratings are from published model information (November 2026) and general experience, not measured on your data. Data security is high for all of them because they run locally; the differences are license terms and training-data transparency."
+      ]
+    }
   }
 }

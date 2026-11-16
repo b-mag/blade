@@ -34,6 +34,7 @@ public sealed class MainViewModel : ObservableObject
 
         Nav.Add(new NavItem("PLATFORM", "Security & Governance", "", new HomePageViewModel(content.Home)));
         Nav.Add(new NavItem("PLATFORM", "Architecture & Deployment", "", new ArchitecturePageViewModel(content.Architecture)));
+        Nav.Add(new NavItem("PLATFORM", "Data Readiness", "", new DataReadinessPageViewModel(content.DataReadiness)));
         Nav.Add(new NavItem("LIVE AI DEMO", "Ask BLADE", "", Ask, "LIVE"));
         Nav.Add(new NavItem("LIVE AI DEMO", "Policy Assistant", "", Policy, "LIVE"));
         Nav.Add(new NavItem("LIVE AI DEMO", "Link Explorer", "", Links, "LIVE"));
@@ -173,6 +174,7 @@ public sealed class MainViewModel : ObservableObject
 
 public sealed record HomePageViewModel(HomeContent Content);
 public sealed record ArchitecturePageViewModel(ArchitectureContent Content);
+public sealed record DataReadinessPageViewModel(DataReadinessContent Content);
 public sealed record OpportunityPageViewModel(Opportunity Content);
 
 public sealed class RoiSummaryPageViewModel(RoiSummary summary, List<Opportunity> opportunities, MainViewModel main)

@@ -9,7 +9,7 @@ Proof of concept: a local-AI investigative and policy assistant for a sheriff's 
 |---|---|
 | `src/Blade.DataGen` | Generates `data/blade.db`: RMS/CAD/FI/LPR/JMS/pawn data with planted investigative storylines, the policy manual, embeddings and FTS indexes |
 | `src/Blade.Server` | ASP.NET Core API on http://localhost:5179. Handles role filtering, hybrid retrieval, the entity graph, grounded LLM answers, the citation guard and the hash-chained audit log |
-| `src/Blade.Desktop` | WPF client: Security & Governance, Architecture, Ask BLADE, Policy Assistant, Link Explorer, Audit Log, and 10 opportunity pages |
+| `src/Blade.Desktop` | WPF client: Security & Governance, Architecture, Data Readiness, Ask BLADE, Policy Assistant, Link Explorer, Audit Log, and 10 opportunity pages |
 | `src/Blade.Core` | Shared contracts and vocabulary |
 | `tests/Blade.Tests` | 42 tests covering data integrity, planner, guards, audit tamper detection, RBAC, graph links and streaming/PII safety |
 

@@ -1,6 +1,7 @@
 <UserControl x:Class="Blade.Desktop.Views.ArchitectureView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:inf="clr-namespace:Blade.Desktop.Infrastructure">
     <!-- DataContext: ArchitecturePageViewModel -->
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="28,20,28,28" MaxWidth="1250" HorizontalAlignment="Left">
@@ -102,7 +103,7 @@
             </ItemsControl>
 
             <TextBlock Style="{StaticResource H2}" Text="Hardware sizing (estimates — validate with a load test on your data)" Margin="0,20,0,8"/>
-            <DataGrid ItemsSource="{Binding Content.Sizing}" HeadersVisibility="Column">
+            <DataGrid ItemsSource="{Binding Content.Sizing}" HeadersVisibility="Column" inf:ScrollBehavior.BubbleWheel="True">
                 <DataGrid.Columns>
                     <DataGridTextColumn Header="Tier" Binding="{Binding Tier}" Width="140"/>
                     <DataGridTemplateColumn Header="Hardware" Width="2*">

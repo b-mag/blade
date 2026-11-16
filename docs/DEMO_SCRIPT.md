@@ -210,6 +210,17 @@ Mention the rest in one breath: body-cam transcription, a report quality checker
 
 ## Q&A prep (likely IT questions)
 
+**Expect "How would we use our X database or Y API?" right after the demo.** Open **Data Readiness** (under PLATFORM). It covers:
+- the six steps that bring any source online, for existing records and for new ones;
+- which source to ready first, and the phases;
+- effort and skills by kind of source;
+- the "ready enough" checks;
+- a SQL Server reference pattern (side tables, one shared vector table);
+- an embedding-model guide: six local models rated on accuracy, security, reliability, scalability and practicality, with a suggested three-model test;
+- 17 short answers to common data questions, including embedding versus chat models.
+
+Walk the six steps first, then let them pick questions from the page.
+
 | Question | Answer |
 |---|---|
 | **What hardware does this need?** | Here, a laptop with an 8 GB GPU running an 8B-parameter open-weight model. For a department, one GPU server serves a team. The Architecture page has the tiers. |
@@ -217,8 +228,10 @@ Mention the rest in one breath: body-cam transcription, a report quality checker
 | **Is this CJIS compliant?** | The POC doesn't claim compliance. It shows the shape of the controls: audit, role filtering and on-prem inference. Production needs advanced authentication, encryption at rest and in transit, personnel screening and hosting controls, all listed under Production design. |
 | **How do you stop hallucination?** | Answers are grounded in retrieved records. The citation guard flags any identifier the model wasn't given, and the answer regenerates if there are too few citations. *Be honest:* the guard checks that a citation is real, not that it supports the claim. Claim-level checking is on the production list. Links and series are computed by code, not by the model. |
 | **What about prompt injection?** | The model's output is never executed. The interpreted filter is schema-constrained to fixed values and becomes parameterized SQL. Narratives are treated as data. In production, an injected narrative could still skew a summary's wording, which is one reason a person reviews it and the citations are clickable. |
-| **How does it connect to our RMS, CAD and jail system?** | Read-only: a database replica or change data capture, vendor APIs, or file drops for legacy exports. Nightly loads plus near-real-time feeds. It never writes back. |
-| **How do you know it's accurate?** | The synthetic data has planted storylines with a hidden answer key. The server never reads it; the tests do. There are 35 automated tests and a golden-question script that runs before every demo. In production, the same idea becomes your own evaluation set. |
+| **How does it connect to our RMS, CAD and jail system?** | Read-only: a database replica or change data capture, vendor APIs, or file drops for legacy exports. Nightly loads plus near-real-time feeds. It never writes back. Then go to the **Data Readiness** page. |
+| **Is readying all our data a big project?** | Across every source, yes: a program over several quarters. But it's done one source at a time in order of value, and each source pays off when it's ready. A first source plus a pilot is about 8–12 weeks. |
+| **Does the model train on our data?** | No. Records are looked up for each question and forgotten after the answer. Remove a record from the index and the AI can no longer use it. |
+| **How do you know it's accurate?** | The synthetic data has planted storylines with a hidden answer key. The server never reads it; the tests do. There are 42 automated tests and a golden-question script that runs before every demo. In production, the same idea becomes your own evaluation set. |
 | **What happens when the model is updated?** | An approved-model registry, pinned versions, a golden-question evaluation before promotion, and rollback. |
 | **How is the search done?** | It's hybrid: a SQL filter, then keyword search (SQLite FTS5 with BM25), plus vector similarity using nomic-embed-text. The two rankings are combined. The entity graph is built from structured links and from plates and phone numbers pulled out of narratives. |
 | **Bias and civil liberties?** | Series and links are leads that require analyst confirmation. Victims and reporting parties are excluded from link analysis. Every query is audited. Production includes a bias and civil-liberties review and a public AI-use policy. |

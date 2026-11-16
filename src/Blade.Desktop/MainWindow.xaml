@@ -9,6 +9,7 @@
     <Window.Resources>
         <DataTemplate DataType="{x:Type vm:HomePageViewModel}"><v:HomeView/></DataTemplate>
         <DataTemplate DataType="{x:Type vm:ArchitecturePageViewModel}"><v:ArchitectureView/></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:DataReadinessPageViewModel}"><v:DataReadinessView/></DataTemplate>
         <DataTemplate DataType="{x:Type vm:AskViewModel}"><v:AskView/></DataTemplate>
         <DataTemplate DataType="{x:Type vm:PolicyViewModel}"><v:PolicyView/></DataTemplate>
         <DataTemplate DataType="{x:Type vm:LinkExplorerViewModel}"><v:LinkExplorerView/></DataTemplate>

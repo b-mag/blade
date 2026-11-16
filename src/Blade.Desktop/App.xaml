@@ -13,6 +13,7 @@
             <inf:KindBrushConverter x:Key="KindBrush"/>
             <inf:MsToWidthConverter x:Key="MsToWidth"/>
             <inf:PercentConverter x:Key="Percent"/>
+            <inf:DotsConverter x:Key="Dots"/>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

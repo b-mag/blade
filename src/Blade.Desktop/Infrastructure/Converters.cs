@@ -71,3 +71,17 @@ public sealed class PercentConverter : IValueConverter
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) => value is double d ? $"{d:P0}" : "";
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
 }
+
+/// <summary>
+/// Score 1-5 → dots. Parameter "filled" gives the earned dots, "empty" the rest, so the two can be colored
+/// differently with the same glyph (the hollow-circle glyph renders at a different size in most fonts).
+/// </summary>
+public sealed class DotsConverter : IValueConverter
+{
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        var n = value is int i ? Math.Clamp(i, 0, 5) : 0;
+        return new string('●', parameter as string == "empty" ? 5 - n : n);
+    }
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
+}
